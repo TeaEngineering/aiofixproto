@@ -7,7 +7,8 @@ import logging
 from contextlib import closing
 
 from aiofix.message import PEEK_SIZE, peek_length, FIXMessageIn, GarbageBufferError, FIXBuilder
-from aiofix.FIXValidator import FIX44Validator, BusinessRejectError, RejectError
+from aiofix.spec import FIX44Spec
+from aiofix.validator import BusinessRejectError, RejectError
 from asyncio_extras.contextmanager import async_contextmanager
 
 
@@ -16,11 +17,11 @@ class LoginError(RuntimeError):
 
 
 class BaseApplication():
-    validator = FIX44Validator
+    spec = FIX44Spec
     our_comp = 'SERVER'
 
     async def checkLogin(self, fix_msg, connection):
-        my_validator = self.validator()
+        my_validator = self.spec().build()
         data = my_validator.validate(fix_msg)
 
         # we'll accept any senderComp so long as it matches the username

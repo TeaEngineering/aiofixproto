@@ -3,14 +3,14 @@ import asyncio
 import logging
 
 from aiofix.engine_streams import StreamFIXConnection, StreamFIXSession, BaseMonitor
-from aiofix.FIXValidator import FIX44Validator
+from aiofix.spec import FIX44Spec
 
 
 class TestStreamFIXSession(StreamFIXSession):
     def __init__(self, username, password):
         self.username = username
         self.password = password
-        validator = FIX44Validator()
+        validator = FIX44Spec().build()
         components = [(49, self.username), (56, 'SERVER')]
         super().__init__(44, validator, components, logger=None)
 

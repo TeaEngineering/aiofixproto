@@ -35,5 +35,5 @@ if __name__ == '__main__':
 
     # Close the server
     server.close()
-    loop.run_until_complete(server.wait_closed())
+    loop.run_until_complete(server_task.wait_closed())
     loop.close()
