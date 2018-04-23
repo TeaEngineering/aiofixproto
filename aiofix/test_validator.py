@@ -59,7 +59,7 @@ class TestValidators(unittest.TestCase):
 
         # Add Username tag
         msg = message.from_delim('8=FIX.4.2|9=70|35=A|34=1|49=ARCA|553=chris|554=secret|52='
-                                    '20150916-04:14:05.306|56=TW|10=249|')
+                                 '20150916-04:14:05.306|56=TW|10=249|')
         with self.assertRaisesRegex(validator.RejectError, 'Unexpected tag 553 found in Logon message') as cm:
             data = v.validate(msg)
         self.assertEqual(cm.exception.sessionRejectReason, 2)
@@ -87,14 +87,14 @@ class TestValidators(unittest.TestCase):
 
         # Check population of optional field (141=Y)
         msg = message.from_delim('8=FIX.4.2|9=76|35=A|34=1|49=ARCA|141=Y|553=chris|554=secret|52='
-                                    '20150916-04:14:05.306|56=TW|10=044|')
+                                 '20150916-04:14:05.306|56=TW|10=044|')
         data = v.validate(msg)
         self.assertEqual(data, {'msg_type': 'logon', 'username': 'chris', 'password': 'secret',
                                 'reset_seq_num_flag': 'Y'})
 
         # Reject illegal value (141=Z)
         msg = message.from_delim('8=FIX.4.2|9=76|35=A|34=1|49=ARCA|141=Z|553=chris|554=secret|'
-                                    '52=20150916-04:14:05.306|56=TW|10=045|')
+                                 '52=20150916-04:14:05.306|56=TW|10=045|')
         with self.assertRaisesRegex(validator.BusinessRejectError, 'Incorrect value 141=Z.*expected Y,N') as cm:
             data = v.validate(msg)
 
@@ -126,7 +126,7 @@ class TestValidators(unittest.TestCase):
 
         # check ordering. 1) 554 first
         msg = message.from_delim('8=FIX.4.2|9=76|35=A|34=1|49=ARCA|141=Z|554=secret|553=chris|52='
-                                    '20150916-04:14:05.306|56=TW|10=045|')
+                                 '20150916-04:14:05.306|56=TW|10=045|')
         with self.assertRaisesRegex(
                 validator.RejectError,
                 re.escape('Field 141 (ResetSeqNumFlag) out of order, expected 553 (Username)')):
@@ -134,13 +134,13 @@ class TestValidators(unittest.TestCase):
 
         # order 553,554 valid if 141 skipped, but 141 is present
         msg = message.from_delim('8=FIX.4.2|9=76|35=A|34=1|49=ARCA|553=chris|554=secret|141=Y|52='
-                                    '20150916-04:14:05.306|56=TW|10=044|')
+                                 '20150916-04:14:05.306|56=TW|10=044|')
         with self.assertRaisesRegex(validator.RejectError, 'Optional field 141 .* out of order.*553, 141.*'):
             data = v.validate(msg)
 
         # valid ordering
         msg = message.from_delim('8=FIX.4.2|9=76|35=A|34=1|49=ARCA|553=chris|141=Y|554=secret|52='
-                                    '20150916-04:14:05.306|56=TW|10=044|')
+                                 '20150916-04:14:05.306|56=TW|10=044|')
         data = v.validate(msg)
         self.assertEqual(data, {'msg_type': 'logon', 'username': 'chris', 'password': 'secret',
                                 'reset_seq_num_flag': 'Y'})
@@ -196,7 +196,7 @@ class TestValidators(unittest.TestCase):
 
         # check ordering. 1) 554 first, colapsed repeating group
         msg = message.from_delim('8=FIX.4.2|9=80|35=S|34=1|49=ARCA|553=one|57=2|55=A|55=B|'
-                                    '554=two|52=20150916-04:14:05.306|56=TW|10=184|')
+                                 '554=two|52=20150916-04:14:05.306|56=TW|10=184|')
         data = v.validate(msg)
         self.assertEqual(data, {'msg_type': 'market_data_subscribe', 'before': 'one', 'after':
                                 'two', 'symbols': ['A', 'B']})
@@ -204,7 +204,7 @@ class TestValidators(unittest.TestCase):
         # repeating group with multiple values in group
         s.add_field_parser(validator.IntField(58, optional=False).known_as('Type'))
         msg = message.from_delim('8=FIX.4.2|9=90|35=S|34=1|49=ARCA|553=one|57=2|55=A|58=1|'
-                                    '55=B|58=2|554=two|52=20150916-04:14:05.306|56=TW|10=114|')
+                                 '55=B|58=2|554=two|52=20150916-04:14:05.306|56=TW|10=114|')
         data = v.validate(msg)
         self.assertEqual(data, {'msg_type': 'market_data_subscribe', 'before': 'one', 'after': 'two',
                                 'symbols': [{'symbol': 'A', 'type': 1}, {'symbol': 'B', 'type': 2}]})
@@ -221,7 +221,7 @@ class TestValidators(unittest.TestCase):
         v.add_message_parser(m)
 
         msg = message.from_delim('8=FIX.4.2|9=69|35=U|34=1|49=ARCA|57=3|55=A|55=B|55=C|52='
-                                    '20150916-04:14:05.306|56=TW|10=090|')
+                                 '20150916-04:14:05.306|56=TW|10=090|')
         data = v.validate(msg)
         self.assertEqual(data, {'msg_type': 'market_data_unsubscribe', 'symbols': ['A', 'B', 'C']})
 
@@ -232,7 +232,7 @@ class TestValidators(unittest.TestCase):
 
         # check repeating group length mismatch 2!=3
         msg = message.from_delim('8=FIX.4.2|9=69|35=U|34=1|49=ARCA|57=2|55=A|55=B|55=C|52='
-                                    '20150916-04:14:05.306|56=TW|10=089|')
+                                 '20150916-04:14:05.306|56=TW|10=089|')
         with self.assertRaisesRegex(
                 validator.RejectError,
                 re.escape("Repeating Group 'Symbols' started by 57=2 (NoSymbols) had 3 repeats, not 2, in "
@@ -240,10 +240,3 @@ class TestValidators(unittest.TestCase):
             data = v.validate(msg)
             print(data)
         self.assertEqual(cm.exception.sessionRejectReason, 16)
-
-        # v.print()
-
-
-
-if __name__ == '__main__':
-    unittest.main()

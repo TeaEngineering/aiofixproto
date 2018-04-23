@@ -339,4 +339,3 @@ class RepeatingGroupLengthField(IntField):
     def print(self, print_callable=print, depth=0):
         IntField.print(self, print_callable, depth)
         self._repeatingGroupParser.print(print_callable, depth+1)
-

@@ -53,7 +53,7 @@ class TestIncomingMethods(unittest.TestCase):
     def test_data_tags(self):
         # testcase - data tag #96 (with length tag #95) containing embedded SOH
         msg = message.from_delim('8=FIX.4.4|9=68|35=A|49=x|56=y|34=1|52=20150215-22:01:05|95=11|96=HELLO|'
-                                    'WORLD|141=Y|10=237|')
+                                 'WORLD|141=Y|10=237|')
         for field in msg:
             if field.tag == 96:
                 self.assertEqual(field.bytes(), b'HELLO\001WORLD')
@@ -71,12 +71,12 @@ class TestIncomingMethods(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, 'No data-length tag 95 found preceeding data tag 96'):
             message.from_delim('8=FIX.4.4|9=62|35=A|49=x|56=y|34=1|52=20150215-22:01:05|96=HELLO|'
-                                  'WORLD|141=Y|10=217|')
+                               'WORLD|141=Y|10=217|')
 
     def test_tag_iterator_no_session(self):
         # Logon
         msg = message.from_delim('8=FIX.4.4|9=89|35=A|49=xxx|56=LMXBL|34=1|52=20150215-22:01:05|'
-                                    '98=0|108=30|141=Y|553=xxx|554=###########|10=231|')
+                                 '98=0|108=30|141=Y|553=xxx|554=###########|10=231|')
 
         self.assertListEqual([field.tag for field in msg], [98, 108, 141, 553, 554])
 
@@ -109,7 +109,7 @@ class TestIncomingMethods(unittest.TestCase):
     def test_order_status(self):
         # OrderStatusRequest
         message.from_delim('8=FIX.4.4|9=82|35=H|49=xxx|56=LMXBL|34=2|52=20150220-10:17:54.279|'
-                              '11=57080.5|48=100637|22=8|54=2|10=107|')
+                           '11=57080.5|48=100637|22=8|54=2|10=107|')
 
     def test_documentation_messages(self):
         message.from_delim(

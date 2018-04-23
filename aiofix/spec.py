@@ -14,6 +14,7 @@ The build() method inspects the object tree, checks for correctness and returns
 the corresponding validator.
 """
 
+
 class ClassFIXSpec():
     def build(self):
         validator = BaseFIXValidator()
@@ -74,6 +75,7 @@ class ClassFIXSpec():
 
                 validator.add_message_parser(m)
         return validator
+
 
 class FIX44BaseSpec(ClassFIXSpec):
     class Heartbeat():
