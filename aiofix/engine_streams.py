@@ -17,8 +17,9 @@ class LoginError(RuntimeError):
 
 
 class BaseApplication():
-    spec = FIX44Spec
-    our_comp = 'SERVER'
+    def __init__(self, spec=FIX44Spec, our_comp='SERVER'):
+        self.spec = spec
+        self.our_comp = our_comp
 
     async def checkLogin(self, fix_msg, connection):
         my_validator = self.spec().build()
