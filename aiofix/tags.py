@@ -21,6 +21,7 @@ Text = 58
 TimeInForce = 59
 TransactTime = 60
 StopPx = 99
+LastQty = 32
 
 SettlCurrency = 120
 ResetSeqNo = 141
