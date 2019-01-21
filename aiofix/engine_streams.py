@@ -8,6 +8,7 @@ from contextlib import closing
 
 from aiofix.message import PEEK_SIZE, peek_length, FIXMessageIn, GarbageBufferError, FIXBuilder
 from aiofix.spec import FIX44Spec
+from aiofix import msgtype, tags
 from aiofix.validator import BusinessRejectError, RejectError
 from asyncio_extras.contextmanager import async_contextmanager
 
@@ -110,9 +111,11 @@ class StreamFIXSession():
         self.logger.info('post_disconnect (server) reached')
 
     @async_contextmanager
-    async def send_message(self, msg_type):
-        builder = FIXBuilder(self.version, self.components, self.clock, msg_type, self.nextOutbound)
-        self.nextOutbound += 1
+    async def send_message(self, msg_type, msgseqnum=None):
+        if msgseqnum is None:
+            msgseqnum = self.nextOutbound
+            self.nextOutbound += 1
+        builder = FIXBuilder(self.version, self.components, self.clock, msg_type, msgseqnum)
         yield builder
         outmsg = builder.finish()
         self.last_outbound = self.clock()
@@ -206,6 +209,17 @@ class StreamFIXSession():
 
     async def on_reject(self, msg, data):
         self.logger.info("Recieved message Reject: {}".format(data))
+
+    async def on_resend_request(self, msg, data):
+        self.logger.info("Recieved ResendRequest {}, out nextOutbound is {}".format(data, self.nextOutbound))
+        if self.logon_recieved and not self.logout_sent:
+            if data['begin_seq_no'] < self.nextOutbound and data['end_seq_no'] >= data['begin_seq_no']:
+                async with self.send_message(msgtype.SequenceReset, msgseqnum=data['begin_seq_no']) as builder:
+                    builder.append(tags.EndSeqNo, data['end_seq_no'])
+                    builder.append(tags.GapFillFlag, 'Y')
+            else:
+                self.logger.warn('ResendReuqest begin seq no {} exceeds our nextOutbound {} or more than endseqno'
+                                 .format(data, self.nextOutbound))
 
 
 class StreamFIXConnection():

@@ -4,12 +4,15 @@
 
 Account = 1
 AvgPx = 6
+BeginSeqNo = 7
 ClOrdID = 11
 CumQty = 14
 Currency = 15
+EndSeqNo = 16
 ExecID = 17
 ExecInst = 18
 LastPx = 31
+NewSeqNo = 36
 OrderID = 37
 OrderQty = 38
 OrdStatus = 39
@@ -24,6 +27,7 @@ StopPx = 99
 LastQty = 32
 
 SettlCurrency = 120
+GapFillFlag = 123
 ResetSeqNo = 141
 NoRelatedSym = 146
 ExecType = 150
