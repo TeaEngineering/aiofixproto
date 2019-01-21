@@ -106,6 +106,9 @@ class StreamFIXSession():
     async def post_connect(self):
         pass
 
+    async def post_disconnect(self):
+        self.logger.info('post_disconnect (server) reached')
+
     @async_contextmanager
     async def send_message(self, msg_type):
         builder = FIXBuilder(self.version, self.components, self.clock, msg_type, self.nextOutbound)
@@ -176,8 +179,9 @@ class StreamFIXSession():
     def embellish_logon(self, outbound):
         pass
 
-    def read_loop_closed(self):
+    async def read_loop_closed(self):
         self.heartbeat_task.cancel()
+        await self.post_disconnect()
 
     async def on_logon_message(self, msg, data):
         self.logon_recieved = True
@@ -271,7 +275,7 @@ class StreamFIXConnection():
         self.writer = None
         await self.monitor.__delitem__(self.connection_id)
         if self.session:
-            self.session.read_loop_closed()
+            await self.session.read_loop_closed()
 
     async def await_logon_timeout(self):
         try:
