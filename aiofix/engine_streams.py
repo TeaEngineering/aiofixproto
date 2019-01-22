@@ -213,9 +213,11 @@ class StreamFIXSession():
     async def on_resend_request(self, msg, data):
         self.logger.info("Recieved ResendRequest {}, out nextOutbound is {}".format(data, self.nextOutbound))
         if self.logon_recieved and not self.logout_sent:
-            if data['begin_seq_no'] < self.nextOutbound and data['end_seq_no'] >= data['begin_seq_no']:
+            if data['begin_seq_no'] < self.nextOutbound:
                 async with self.send_message(msgtype.SequenceReset, msgseqnum=data['begin_seq_no']) as builder:
-                    builder.append(tags.EndSeqNo, data['end_seq_no'])
+                    #end_seq_no might be zero to indicate unbounaded replay
+                    end = data['end_seq_no'] if data['end_seq_no'] > 0 else self.nextOutbound
+                    builder.append(tags.EndSeqNo, end)
                     builder.append(tags.GapFillFlag, 'Y')
             else:
                 self.logger.warn('ResendReuqest begin seq no {} exceeds our nextOutbound {} or more than endseqno'
