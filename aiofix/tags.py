@@ -12,6 +12,7 @@ EndSeqNo = 16
 ExecID = 17
 ExecInst = 18
 LastPx = 31
+LastQty = 32
 NewSeqNo = 36
 OrderID = 37
 OrderQty = 38
@@ -24,8 +25,8 @@ Text = 58
 TimeInForce = 59
 TransactTime = 60
 StopPx = 99
-LastQty = 32
 
+CxlRejReason = 102
 SettlCurrency = 120
 GapFillFlag = 123
 ResetSeqNo = 141
