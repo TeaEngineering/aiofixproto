@@ -138,16 +138,16 @@ class FIXMessageIn():
         chk_given = int(buffer[-4:-1])
 
         logging.debug('FIX inbound msg: ver={} body len={} hlen={} checksum '
-                      'desired={} given={} buffer:\n{}'.format(
+                      'desired={} given={} buffer: {}'.format(
                        self.version, body_length, hlen, chk_desired, chk_given, buffer))
         expected_len = hlen + body_length + 7
         if not expected_len == len(buffer):
             should_be = len(buffer) - hlen - 7
             raise ValueError('Bad BodyLength: tag 9={} implies {} bytes, '
-                             'buffer was {} bytes! (should be 9={}) msg:\n{}'.
+                             'buffer was {} bytes! (should be 9={}) msg: {}'.
                              format(body_length, expected_len, len(buffer), should_be, buffer))
         if not chk_given == chk_desired:
-            raise ValueError('Bad Checksum: calculated={} embedded={} buffer:\n{}'.
+            raise ValueError('Bad Checksum: calculated={} embedded={} buffer: {}'.
                              format(chk_desired, chk_given, buffer))
 
         # FIX Body parser
