@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from aiofix.engine_streams import BaseApplication, StreamFIXSession, StreamFIXConnection, BaseMonitor, LoginError
+from aiofix.engine_streams import BaseApplication, StreamFIXSession, BaseMonitor, LoginError
 
 
 class TestApplication(BaseApplication):
@@ -17,13 +17,10 @@ if __name__ == '__main__':
 
     application = TestApplication()
     monitor = BaseMonitor()
-
-    async def handle_stream_pair(reader, writer):
-        fixconnection = StreamFIXConnection(reader, writer, monitor, application=application)
-        await fixconnection.read_loop()
+    application.monitor = monitor
 
     loop = asyncio.get_event_loop()
-    server = asyncio.start_server(handle_stream_pair, '127.0.0.1', 8888, loop=loop)
+    server = asyncio.start_server(application.handle_stream_pair, '127.0.0.1', 8888, loop=loop)
     server_task = loop.run_until_complete(server)
 
     # Serve requests until Ctrl+C is pressed

@@ -21,6 +21,7 @@ class BaseApplication():
     def __init__(self, spec=FIX44Spec, our_comp='SERVER'):
         self.spec = spec
         self.our_comp = our_comp
+        self.monitor = None
 
     async def checkLogin(self, fix_msg, connection):
         my_validator = self.spec().build()
@@ -62,6 +63,10 @@ class BaseApplication():
 
     async def check_credentials_create_session(self, data, kwargs):
         raise LoginError('Incorrect login')
+
+    async def handle_stream_pair(self, reader, writer):
+        fixconnection = StreamFIXConnection(reader, writer, self.monitor, application=self)
+        await fixconnection.read_loop()
 
 
 class StreamFIXSession():
