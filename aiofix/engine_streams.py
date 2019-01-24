@@ -117,12 +117,14 @@ class StreamFIXSession():
 
     @async_contextmanager
     async def send_message(self, msg_type, msgseqnum=None):
+        delta = 0
         if msgseqnum is None:
             msgseqnum = self.nextOutbound
-            self.nextOutbound += 1
+            delta = 1
         builder = FIXBuilder(self.version, self.components, self.clock, msg_type, msgseqnum)
         yield builder
         outmsg = builder.finish()
+        self.nextOutbound += delta
         self.last_outbound = self.clock()
         await self.writer.send(outmsg)
 
