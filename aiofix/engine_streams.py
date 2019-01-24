@@ -164,10 +164,12 @@ class StreamFIXSession():
 
     async def await_heartbeat(self):
         while True:
+            # as we sleep for one second, send heartbeat if were within 1 seconds of the hb_interval
+            # and allow one second as "some reasonable transmission time"
+            hb_interval = max(self.hb_interval - 2, 1)
             await asyncio.sleep(1.0)
             try:
-
-                if self.clock() - self.last_outbound >= self.hb_interval and self.logon_recieved:
+                if self.clock() - self.last_outbound > hb_interval and self.logon_recieved:
                     self.logger.debug('Sending heartbeat')
                     async with self.send_message('0') as builder:
                         pass
