@@ -222,7 +222,7 @@ class StreamFIXSession():
                 async with self.send_message(msgtype.SequenceReset, msgseqnum=data['begin_seq_no']) as builder:
                     # Caution: end_seq_no might be zero to indicate unbounaded replay
                     end = data['end_seq_no'] if data['end_seq_no'] > 0 else self.nextOutbound
-                    builder.append(tags.EndSeqNo, end)
+                    builder.append(tags.NewSeqNo, end)
                     builder.append(tags.GapFillFlag, 'Y')
             else:
                 self.logger.warn('ResendReuqest begin seq no {} exceeds our nextOutbound {} or more than endseqno'
