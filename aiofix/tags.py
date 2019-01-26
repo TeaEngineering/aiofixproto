@@ -18,6 +18,7 @@ OrderID = 37
 OrderQty = 38
 OrdStatus = 39
 OrdType = 40
+OrigClOrdID = 41
 Price = 44
 Side = 54
 Symbol = 55
