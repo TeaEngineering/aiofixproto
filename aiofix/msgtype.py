@@ -4,3 +4,4 @@
 
 SequenceReset = '4'
 OrderCancelReject = '9'
+OrderCancelRequest = 'F'

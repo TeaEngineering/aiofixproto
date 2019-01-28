@@ -17,6 +17,14 @@ class LoginError(RuntimeError):
     pass
 
 
+# StreamFIXSession subclasses throw this to send a BusinessMessageReject
+class BusinessMessageReject(RuntimeError):
+    def __init__(self, message, ref_id="N/A", reject_reason=0):
+        super().__init__(message)
+        self.reject_ref_id = ref_id
+        self.reject_reason = reject_reason
+
+
 class BaseApplication():
     def __init__(self, spec=FIX44Spec, our_comp='SERVER'):
         self.spec = spec
@@ -91,7 +99,11 @@ class StreamFIXSession():
         self.last_inbound = self.clock()
         c = getattr(self, 'on_'+data['msg_type'])
         if inspect.iscoroutinefunction(c):
-            await c(fix_msg, data)
+            try:
+                await c(fix_msg, data)
+            except BusinessMessageReject as bmr:
+                # translate to aiofix.validator.BusinessRejectError, adding current fix_msg as context
+                raise BusinessRejectError(bmr.message, fix_msg, ref_id=bmr.ref_id, reject_reason=bmr.reject_reason)
         else:
             raise RuntimeError('No async handler defined for {}'.format(data['msg_type']))
 
@@ -271,6 +283,7 @@ class StreamFIXConnection():
                     fix_msg = FIXMessageIn(data)
                     self.logger.debug("Received {}".format(fix_msg.buffer))
                     await self.handle_incoming(fix_msg)
+
                 # Sanitise certain error messages to the websocket logger, dropping the exception
                 except (asyncio.streams.IncompleteReadError, ConnectionResetError):
                     self.logger.info('End of stream - incomplete message')

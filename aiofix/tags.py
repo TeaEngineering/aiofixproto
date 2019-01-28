@@ -59,6 +59,8 @@ SecurityStatusReqID = 324
 HighPx = 332
 LowPx = 333
 
+CxlRejResponseTo = 434
+
 CFICode = 461
 
 MaturityDate = 541
