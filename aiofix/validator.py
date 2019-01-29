@@ -14,9 +14,10 @@ generate decent Reject/BMR messages.
 
 
 class RejectError(RuntimeError):
-    def __init__(self, message, fixMsg, sessionRejectReason):
+    def __init__(self, message, fixMsg, sessionRejectReason=None, refTagID=None):
         super().__init__(message)
         self.fixMsg = fixMsg
+        self.refTagID = None
         self.sessionRejectReason = sessionRejectReason
 
 
@@ -161,7 +162,8 @@ class Message():
                         'Incorrect value {0.tag}={2} ({0._known_as}) in {1.msg_name}[{1.msg_type}] '
                         'message{3}'.format(field_parser, self, field.value(), vm), fixmsg)
             except KeyError:
-                raise RejectError("Unexpected tag {0} found in {1} message".format(field.tag, self.msg_name), fixmsg, 2)
+                raise RejectError("Unexpected tag {0} found in {1} message".format(
+                    field.tag, self.msg_name), fixmsg, 2, refTagID=field.tag)
         msg_parser.on_exit()
 
     def get_field_parser(self, tag):
@@ -193,12 +195,13 @@ class Message():
                         raise RejectError(
                             'Field {0.tag} ({0._known_as}) out of order, expected {1.tag} ({1._known_as})'
                             ' in {2.msg_name}[{2.msg_type}] message'.
-                            format(field_parser, next_expected, self), fixmsg, 14)
+                            format(field_parser, next_expected, self), fixmsg, 14, refTagID=field_parser.tag)
             except StopIteration:
                 # reached end of ordered, must be optional field later than specified
                 raise RejectError(
                     'Optional field {0.tag} ({0._known_as}) out of order, should be {1._fieldorder_desc}'
-                    ' in {1.msg_name}[{1.msg_type}] message'.format(field_parser, self), fixmsg, 14)
+                    ' in {1.msg_name}[{1.msg_type}] message'.format(field_parser, self),
+                    fixmsg, 14, refTagID=field_parser.tag)
 
     def _check_position_at(self, position, field):
         pass
@@ -209,7 +212,7 @@ class Message():
             missing_field = list(self._required.values())[0]
             raise RejectError(
                 "Required tag {0.tag} ({0._known_as}) missing in {1.msg_name}[{1.msg_type}] message".
-                format(missing_field, self), self._fixmsg, 1)
+                format(missing_field, self), self._fixmsg, 1, refTagID=missing_field.tag)
 
     def print(self, print_callable=print, depth=0):
         for field in self._fields:

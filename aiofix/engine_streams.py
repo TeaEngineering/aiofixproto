@@ -174,6 +174,41 @@ class StreamFIXSession():
             builder.append(380, bmr.reject_reason)
             builder.append(58,  str(bmr))
 
+    async def send_reject(self, rej):
+        # 45 RefSeqNum @RefSeqNum MsgSeqNum of rejected message
+        # 372 RefMsgType @RefMsgType The MsgType of the FIX message being referenced.
+        # 371 RefTagID @RefTagID The tag number of the FIX field being referenced.
+        # 373 SessionRejectReason Code to identify reason for a session-level Reject message.
+        #     0 = Invalid Tag Number
+        #     1 = Required Tag Missing
+        #     2 = Tag not defined for this message type
+        #     3 = Undefined tag
+        #     4 = Tag specified without a value
+        #     5 = Value is incorrect (out of range) for this tag
+        #     6 = Incorrect data format for value
+        #     7 = Decryption problem
+        #     8 = Signature problem
+        #     9 = CompID problem
+        #    10 = SendingTime Accuracy Problem
+        #    11 = Invalid MsgType
+        #    12 = XML Validation Error
+        #    13 = Tag appears more than once
+        #    14 = Tag specified out of required order
+        #    15 = Repeating group fields out of order
+        #    16 = Incorrect NumInGroup count for repeating group
+        #    17 = Non "Data" value includes field delimiter (<SOH> character)
+        #    18 = Invalid/Unsupported Application Version
+        #    99 = Other
+        # 58  Text
+        async with self.send_message(msgtype.Reject) as builder:
+            builder.append(45, rej.fixMsg.seqnum)
+            builder.append(372, rej.fixMsg.msg_type)
+            if rej.tagID:
+                builder.append(371, rej.tagID)
+            if rej.sessionRejectReason:
+                builder.append(373, rej.sessionRejectReason)
+            builder.append(58,  str(rej))
+
     async def await_heartbeat(self):
         while True:
             # as we sleep for one second, send heartbeat if were within 1 seconds of the hb_interval
@@ -300,7 +335,9 @@ class StreamFIXConnection():
                 except RejectError as rej:
                     self.logger.warn('Message rejected: {}'.format(rej))
                     # if session not yet established, tear down after one reject (e.g. badly formed Logon)
-                    if not self.session:
+                    if self.session:
+                        await self.session.send_reject(rej)
+                    else:
                         break
                 except BusinessRejectError as bmr:
                     # catch, but stay connected
