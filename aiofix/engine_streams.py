@@ -49,11 +49,11 @@ class BaseApplication():
         senderCompID = None
         targetCompID = None
         for field in fix_msg.session_tags():
-            if field.tag == 49:
+            if field.tag == tags.senderCompID:
                 if senderCompID:
                     raise LoginError('duplicate senderCompID')
                 senderCompID = field.value()
-            elif field.tag == 56:
+            elif field.tag == tags.TargetCompID:
                 if targetCompID:
                     raise LoginError('duplicate targetCompID')
                 targetCompID = field.value()
@@ -67,7 +67,7 @@ class BaseApplication():
             raise LoginError('incorrect senderCompID, expected {} recieved {}'.format(sender, senderCompID))
 
         # now pack in wire order from *our* perspective
-        return [(49, targetCompID), (56, senderCompID)]
+        return [(tags.SenderCompID, targetCompID), (tags.TargetCompID, senderCompID)]
 
     async def check_credentials_create_session(self, data, kwargs):
         raise LoginError('Incorrect login')
@@ -141,13 +141,12 @@ class StreamFIXSession():
         await self.writer.send(outmsg)
 
     async def send_login(self):
-        async with self.send_message('A') as builder:
-            builder.append(108, self.hb_interval)
-            builder.append(98, '0')  # no encryption
+        async with self.send_message(msgtype.Logon) as builder:
+            builder.append(tags.HeartBtInt, self.hb_interval)
+            builder.append(tags.EncryptMethod, '0')  # no encryption
             self.embellish_logon(builder)
 
     async def send_business_message_reject(self, bmr):
-        rejectedMsg = bmr.fixMsg
         # 45 RefSeqNum @RefSeqNum MsgSeqNum of rejected message
         # 372 RefMsgType @RefMsgType The MsgType of the FIX message being referenced.
         # 1130  RefApplVerID @RefApplVerID
@@ -167,12 +166,12 @@ class StreamFIXSession():
         #   7   =   DeliverTo firm not available at this time
         #   18  =   Invalid price increment
         # 58  Text
-        async with self.send_message('j') as builder:
-            builder.append(45, rejectedMsg.seqnum)
-            builder.append(372, rejectedMsg.msg_type)
-            builder.append(379, bmr.reject_ref_id)
-            builder.append(380, bmr.reject_reason)
-            builder.append(58,  str(bmr))
+        async with self.send_message(msgtype.BusinessMessageReject) as builder:
+            builder.append(tags.RefSeqNum, bmr.fixMsg.seqnum)
+            builder.append(tags.RefMsgType, bmr.fixMsg.msg_type)
+            builder.append(tags.BusinessRejectRefID, bmr.reject_ref_id)
+            builder.append(tags.BusinessRejectReason, bmr.reject_reason)
+            builder.append(tags.Text, str(bmr))
 
     async def send_reject(self, rej):
         # 45 RefSeqNum @RefSeqNum MsgSeqNum of rejected message
@@ -201,13 +200,13 @@ class StreamFIXSession():
         #    99 = Other
         # 58  Text
         async with self.send_message(msgtype.Reject) as builder:
-            builder.append(45, rej.fixMsg.seqnum)
-            builder.append(372, rej.fixMsg.msg_type)
+            builder.append(tags.RefSeqNum, rej.fixMsg.seqnum)
+            builder.append(tags.RefMsgType, rej.fixMsg.msg_type)
             if rej.tagID:
-                builder.append(371, rej.tagID)
+                builder.append(tags.RefTagID, rej.tagID)
             if rej.sessionRejectReason:
-                builder.append(373, rej.sessionRejectReason)
-            builder.append(58,  str(rej))
+                builder.append(tags.SessionRejectReason, rej.sessionRejectReason)
+            builder.append(tags.Text, str(rej))
 
     async def await_heartbeat(self):
         while True:
@@ -230,7 +229,7 @@ class StreamFIXSession():
                     tr = uuid.uuid4().hex[0:10]
                     self.logger.info('Inbound heartbeat is overdue, sending test request {}'.format(tr))
                     async with self.send_message('1') as builder:
-                        builder.append(112, tr)  # TestReqID
+                        builder.append(tags.TestReqID, tr)  # TestReqID
 
             except Exception:
                 self.logger.exception('tx heartbeat aborted')
@@ -252,14 +251,14 @@ class StreamFIXSession():
     async def on_logout_message(self, msg, data):
         self.logon_recieved = False
         if not self.logout_sent:  # send recripricol Logout
-            async with self.send_message('5'):
+            async with self.send_message(msgtype.Logout):
                 pass
 
     async def on_test_request(self, msg, data):
         if self.logon_recieved:
             self.logger.info('Responding to test request with ID {}'.format(data['test_req_id']))
-            async with self.send_message('0') as builder:
-                builder.append(112, data['test_req_id'])
+            async with self.send_message(msgtype.Heartbeat) as builder:
+                builder.append(tags.TestReqID, data['test_req_id'])
         else:
             self.logger.info('Ignoring test request {} as no logon recieved'.format(data['test_req_id']))
 
@@ -276,7 +275,7 @@ class StreamFIXSession():
                     builder.append(tags.NewSeqNo, end)
                     builder.append(tags.GapFillFlag, 'Y')
             else:
-                self.logger.warn('ResendReuqest begin seq no {} exceeds our nextOutbound {} or more than endseqno'
+                self.logger.warn('ResendRequest begin seq no {} exceeds our nextOutbound {} or more than endseqno'
                                  .format(data, self.nextOutbound))
 
 
@@ -367,7 +366,7 @@ class StreamFIXConnection():
             await self.session.handle_incoming(fix_msg)
         else:
             # Not yet authenticated, accept exactly one Login message
-            if fix_msg.msg_type == 'A':
+            if fix_msg.msg_type == msgtype.Logon:
                 self.session = await self.application.checkLogin(fix_msg, self)
                 self.session.writer = self
                 # Now check sequencing

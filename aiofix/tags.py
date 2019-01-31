@@ -20,14 +20,20 @@ OrdStatus = 39
 OrdType = 40
 OrigClOrdID = 41
 Price = 44
+RefSeqNum = 45
+SenderCompID = 49
 Side = 54
 Symbol = 55
+TargetCompID = 56
 Text = 58
 TimeInForce = 59
 TransactTime = 60
+EncryptMethod = 98
 StopPx = 99
 
 CxlRejReason = 102
+HeartBtInt = 108
+TestReqID = 112
 SettlCurrency = 120
 GapFillFlag = 123
 ResetSeqNo = 141
@@ -58,6 +64,12 @@ SecurityStatusReqID = 324
 
 HighPx = 332
 LowPx = 333
+
+RefTagID = 371
+RefMsgType = 372
+SessionRejectReason = 373
+BusinessRejectRefID = 379
+BusinessRejectReason = 380
 
 CxlRejResponseTo = 434
 
