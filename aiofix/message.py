@@ -264,12 +264,3 @@ class FIXBuilder():
             self.append_bytes(tag, value)
         else:
             raise TypeError('No encoder for type {}'.format(type(value)))
-
-
-def builder_for_connection(connection, msgtype):
-    # connection holds: clock, compIDs, FIX version,
-    # session holds: msgseqnum,
-    session = connection.session
-    components = [(49, session.senderCompID), (56, session.targetCompID)]
-
-    return FIXBuilder(session.version, components, connection.clock, msgtype, session.lastOutbound)

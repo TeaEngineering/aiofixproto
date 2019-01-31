@@ -4,6 +4,15 @@ import unittest
 import time
 
 
+def builder_for_connection(connection, msgtype):
+    # connection holds: clock, compIDs, FIX version,
+    # session holds: msgseqnum,
+    session = connection.session
+    components = [(49, session.senderCompID), (56, session.targetCompID)]
+
+    return message.FIXBuilder(session.version, components, connection.clock, msgtype, session.lastOutbound)
+
+
 class TestIncomingMethods(unittest.TestCase):
 
     def test_well_formed_msg(self):
@@ -175,7 +184,7 @@ class TestOutgoingMethods(unittest.TestCase):
                 self.session = dummy_session()
         c = dummy_connection()
 
-        builder = message.builder_for_connection(c, msgtype='AE')
+        builder = builder_for_connection(c, msgtype='AE')
         builder.append(569, 1)
         builder.append(580, '2')
         builder.append_datetime(60, time.time())
@@ -185,7 +194,7 @@ class TestOutgoingMethods(unittest.TestCase):
         self.assertEqual(fm.msg_type, 'AE')
 
         with self.assertRaisesRegex(ValueError, 'Bad message type'):
-            message.builder_for_connection(c, msgtype='AES')
+            builder_for_connection(c, msgtype='AES')
 
 
 if __name__ == '__main__':
