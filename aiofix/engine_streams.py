@@ -10,7 +10,7 @@ from aiofix.message import PEEK_SIZE, peek_length, FIXMessageIn, GarbageBufferEr
 from aiofix.spec import FIX44Spec
 from aiofix import msgtype, tags
 from aiofix.validator import BusinessRejectError, RejectError
-from asyncio_extras.contextmanager import async_contextmanager
+from contextlib import asynccontextmanager
 
 
 class LoginError(RuntimeError):
@@ -49,7 +49,7 @@ class BaseApplication():
         senderCompID = None
         targetCompID = None
         for field in fix_msg.session_tags():
-            if field.tag == tags.senderCompID:
+            if field.tag == tags.SenderCompID:
                 if senderCompID:
                     raise LoginError('duplicate senderCompID')
                 senderCompID = field.value()
@@ -127,7 +127,7 @@ class StreamFIXSession():
     async def post_disconnect(self):
         self.logger.info('post_disconnect (server) reached')
 
-    @async_contextmanager
+    @asynccontextmanager
     async def send_message(self, msg_type, msgseqnum=None):
         delta = 0
         if msgseqnum is None:
@@ -319,7 +319,7 @@ class StreamFIXConnection():
                     await self.handle_incoming(fix_msg)
 
                 # Sanitise certain error messages to the websocket logger, dropping the exception
-                except (asyncio.streams.IncompleteReadError, ConnectionResetError):
+                except (asyncio.IncompleteReadError, ConnectionResetError):
                     self.logger.info('End of stream - incomplete message')
                     break
                 except TimeoutError as timeout:

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-
+import argparse
 from aiofix.engine_streams import BaseApplication, StreamFIXSession, BaseMonitor, LoginError
 
 
@@ -12,25 +12,25 @@ class TestApplication(BaseApplication):
         raise LoginError('Incorrect login')
 
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-
+async def main():
     application = TestApplication()
     monitor = BaseMonitor()
     application.monitor = monitor
-
-    loop = asyncio.get_event_loop()
-    server = asyncio.start_server(application.handle_stream_pair, '127.0.0.1', 8888, loop=loop)
-    server_task = loop.run_until_complete(server)
+    server = await asyncio.start_server(application.handle_stream_pair, '127.0.0.1', 8888)
 
     # Serve requests until Ctrl+C is pressed
-    print('Serving on {}'.format(server_task.sockets[0].getsockname()))
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
+    addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
+    logging.info(f'Serving on {addrs}')
+    async with server:
+        await server.serve_forever()
 
     # Close the server
     server.close()
-    loop.run_until_complete(server_task.wait_closed())
-    loop.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Connect as fix client')
+    parser.add_argument('--debug', action='store_true', default=False)
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+    asyncio.run(main())

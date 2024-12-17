@@ -18,7 +18,6 @@ class TestStreamFIXSession(StreamFIXSession):
         builder.append(553, self.username)
         builder.append(554, self.password)
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Connect as fix client')
     parser.add_argument('--host', default='localhost')
@@ -29,17 +28,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
-    loop = asyncio.get_event_loop()
 
     async def connect():
-        reader, writer = await asyncio.open_connection(host=args.host, port=args.port, loop=loop)
+        reader, writer = await asyncio.open_connection(host=args.host, port=args.port)
         session = TestStreamFIXSession(username=args.username, password=args.password)
         fixconnection = StreamFIXConnection(reader, writer, monitor=BaseMonitor(), session=session)
         await fixconnection.read_loop()
 
-    try:
-        loop.run_until_complete(connect())
-    except KeyboardInterrupt:
-        pass
-
-    loop.close()
+    asyncio.run(connect())
