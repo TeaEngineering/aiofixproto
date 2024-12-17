@@ -17,13 +17,13 @@ import logging
 import time
 
 
-def from_delim(text, delim='|'):
-    buffer = ''.join(['\001' if b == delim else b for b in text])
-    b = bytes(buffer, 'ASCII')
+def from_delim(text, delim="|"):
+    buffer = "".join(["\001" if b == delim else b for b in text])
+    b = bytes(buffer, "ASCII")
     return FIXMessageIn(b)
 
 
-class FIXValue():
+class FIXValue:
     def __init__(self, buffer):
         self.tag = 0
         self.buffer = buffer
@@ -35,13 +35,13 @@ class FIXValue():
         return self
 
     def value(self):
-        return self.buffer[self.start:self.end].decode('cp1252')
+        return self.buffer[self.start : self.end].decode("cp1252")
 
     def bytes(self):
-        return self.buffer[self.start:self.end]
+        return self.buffer[self.start : self.end]
 
 
-fixversion_decode = {b'8=FIX.4.2': 42, b'8=FIX.4.4': 44, b'8=FIX.T': 50}
+fixversion_decode = {b"8=FIX.4.2": 42, b"8=FIX.4.4": 44, b"8=FIX.T": 50}
 fixversion_encode = dict([(v, k) for (k, v) in fixversion_decode.items()])
 
 # map data-length to data-tag: 95=rawDataLength 96=rawData
@@ -60,20 +60,20 @@ class GarbageBufferError(RuntimeError):
 
 def peek_length(buffer):
     """Peek into a (possibly) partial buffer and determine the number of bytes
-     needed for the whole message"""
-    if not type(buffer) is bytes:
+    needed for the whole message"""
+    if type(buffer) is not bytes:
         raise TypeError("wrong type")
 
     # simple delimit by SOH in first 30 characters
-    prefix_parts = buffer[0:PEEK_SIZE].split(b'\001')
+    prefix_parts = buffer[0:PEEK_SIZE].split(b"\001")
     if len(buffer) < PEEK_SIZE:
         return -1  # Need more bytes
     if len(prefix_parts) < 3:
         # Need at least SOH after message length to be valid
         raise GarbageBufferError("Invalid: No tag delimiters (SOH) in message")
-    if not buffer[0:2] == b'8=':
+    if not buffer[0:2] == b"8=":
         raise ValueError("BeginString[8] must be the 1st field")
-    if not prefix_parts[1][0:2] == b'9=':
+    if not prefix_parts[1][0:2] == b"9=":
         raise ValueError("Bodylength[9] must be 2nd field {}".format(buffer))
     body_length = int(prefix_parts[1][2:])
 
@@ -84,36 +84,45 @@ def peek_length(buffer):
     return hlen + body_length + 7
 
 
-class FIXMessageIn():
+class FIXMessageIn:
     def __init__(self, buffer):
-        if not type(buffer) is bytes:
+        if type(buffer) is not bytes:
             raise TypeError("wrong type")
         if len(buffer) < PEEK_SIZE:
-            raise ValueError("buffer too short to contain FIX message {}".format(buffer))
-        if not buffer[0:6] == b'8=FIX.':
+            raise ValueError(
+                "buffer too short to contain FIX message {}".format(buffer)
+            )
+        if not buffer[0:6] == b"8=FIX.":
             raise ValueError("BeginString[8] must be 1st field {}".format(buffer))
 
         # simple delimit by SOH in first 30 characters, since no
         # raw data tags/values can occur this early in the message
-        prefix_parts = buffer[0:PEEK_SIZE].split(b'\001')
+        prefix_parts = buffer[0:PEEK_SIZE].split(b"\001")
 
         # Simple tests for "garbled messages" from FIX44 vol2 page 29
         try:
-            self.version = fixversion_decode[prefix_parts[0]]  # validate FIX Version from BeginString[8]
+            self.version = fixversion_decode[
+                prefix_parts[0]
+            ]  # validate FIX Version from BeginString[8]
         except Exception:
-            raise ValueError('BeginString not a valid FIX implementation, try: {}'.
-                             format(fixversion_decode.keys()))
-        if not prefix_parts[1][0:2] == b'9=':
+            raise ValueError(
+                "BeginString not a valid FIX implementation, try: {}".format(
+                    fixversion_decode.keys()
+                )
+            )
+        if not prefix_parts[1][0:2] == b"9=":
             raise ValueError("Bodylength[9] must be 2nd field {}".format(buffer))
-        if not prefix_parts[2][0:3] == b'35=':
+        if not prefix_parts[2][0:3] == b"35=":
             raise ValueError("MsgType[35] must be 3rd field {}".format(buffer))
         body_length = int(prefix_parts[1][2:])  # TODO: byte to int?
-        if not buffer[-1:] == b'\x01':  # |10=xxx|
+        if not buffer[-1:] == b"\x01":  # |10=xxx|
             raise ValueError("Checksum[10] missing trailing SOH {}".format(buffer))
-        if not buffer[-8:-4] == b'\x0110=':  # |10=xxx|
-            raise ValueError("Checksum[10] must be last field in buffer {}".format(buffer))
+        if not buffer[-8:-4] == b"\x0110=":  # |10=xxx|
+            raise ValueError(
+                "Checksum[10] must be last field in buffer {}".format(buffer)
+            )
 
-        self.msg_type = prefix_parts[2][3:].decode('cp1252')
+        self.msg_type = prefix_parts[2][3:].decode("cp1252")
         self.buffer = buffer
 
         # Data Integrity - FIX44 vol2 page 4
@@ -137,18 +146,27 @@ class FIXMessageIn():
         chk_desired = sum(cont) % 256
         chk_given = int(buffer[-4:-1])
 
-        logging.debug('FIX inbound msg: ver={} body len={} hlen={} checksum '
-                      'desired={} given={} buffer: {}'.format(
-                       self.version, body_length, hlen, chk_desired, chk_given, buffer))
+        logging.debug(
+            "FIX inbound msg: ver={} body len={} hlen={} checksum "
+            "desired={} given={} buffer: {}".format(
+                self.version, body_length, hlen, chk_desired, chk_given, buffer
+            )
+        )
         expected_len = hlen + body_length + 7
         if not expected_len == len(buffer):
             should_be = len(buffer) - hlen - 7
-            raise ValueError('Bad BodyLength: tag 9={} implies {} bytes, '
-                             'buffer was {} bytes! (should be 9={}) msg: {}'.
-                             format(body_length, expected_len, len(buffer), should_be, buffer))
+            raise ValueError(
+                "Bad BodyLength: tag 9={} implies {} bytes, "
+                "buffer was {} bytes! (should be 9={}) msg: {}".format(
+                    body_length, expected_len, len(buffer), should_be, buffer
+                )
+            )
         if not chk_given == chk_desired:
-            raise ValueError('Bad Checksum: calculated={} embedded={} buffer: {}'.
-                             format(chk_desired, chk_given, buffer))
+            raise ValueError(
+                "Bad Checksum: calculated={} embedded={} buffer: {}".format(
+                    chk_desired, chk_given, buffer
+                )
+            )
 
         # FIX Body parser
         # Now the length and checksum are good, iterate over the message picking up tag start and end positions.
@@ -175,11 +193,14 @@ class FIXMessageIn():
                         # jump straight to SOH using known length
                         i = i + datatag_known_lengths[tag]
                     except Exception:
-                        raise ValueError('No data-length tag {} found preceeding data tag {}:\n{}'.
-                                         format(data_tag_to_length[tag], tag, buffer))
+                        raise ValueError(
+                            "No data-length tag {} found preceeding data tag {}:\n{}".format(
+                                data_tag_to_length[tag], tag, buffer
+                            )
+                        )
             elif buffer[i] == 0x01 and in_tag_value:
                 tag_tuple = (tag, tag_data_start, i)
-                content = buffer[tag_tuple[1]:tag_tuple[2]]
+                content = buffer[tag_tuple[1] : tag_tuple[2]]
                 # print(' >> {}  = {}'.format(tag, content))
                 if tag in data_length_to_tag.keys():
                     # print('got data tag length {} with value {}'.format(tag, content))
@@ -210,7 +231,7 @@ class FIXMessageIn():
             yield value.position(*tagposition)
 
 
-class FIXBuilder():
+class FIXBuilder:
     # Assemble a FIX message for sending
     def __init__(self, version, components, clock, msgtype, msgseqnum):
         if len(msgtype) not in [1, 2]:
@@ -218,43 +239,60 @@ class FIXBuilder():
         self.fields = []
         self.version = version
         self.append(35, msgtype)
-        for (k, v) in components:
+        for k, v in components:
             self.append(k, v)
         self.append(34, msgseqnum)
         self.append_datetime(52, clock)
 
     def finish(self):
-        body = b''.join([str(tag).encode('utf-8') + b'=' + value + b'\001' for (tag, value) in self.fields])
+        body = b"".join(
+            [
+                str(tag).encode("utf-8") + b"=" + value + b"\001"
+                for (tag, value) in self.fields
+            ]
+        )
         msglen = len(body)
-        buffer = fixversion_encode[self.version] + b'\0019=' + str(msglen).encode('utf-8') + b'\001' + body
+        buffer = (
+            fixversion_encode[self.version]
+            + b"\0019="
+            + str(msglen).encode("utf-8")
+            + b"\001"
+            + body
+        )
         checksum = sum(buffer) % 256
-        buffer = buffer + b'10=' + '{:03}'.format(checksum).encode('utf-8') + b'\001'
+        buffer = buffer + b"10=" + "{:03}".format(checksum).encode("utf-8") + b"\001"
         return FIXMessageIn(buffer)
 
     def append_bytes(self, tag, value):
-        if not type(value) is bytes:
-            raise TypeError('Value must be bytes')
-        if not type(tag) is int:
-            raise TypeError('Tag must be int')
+        if type(value) is not bytes:
+            raise TypeError("Value must be bytes")
+        if type(tag) is not int:
+            raise TypeError("Tag must be int")
         data_tag_length_tag = data_tag_to_length.get(tag)
         if data_tag_length_tag:
             self.append_int(data_tag_length_tag, len(value))
-        elif '\001' in value:
-            raise ValueError('Cannot have SOH character in non-data tag {}, value {}'.format(tag, value))
+        elif "\001" in value:
+            raise ValueError(
+                "Cannot have SOH character in non-data tag {}, value {}".format(
+                    tag, value
+                )
+            )
         self.fields.append((tag, value))
 
     def append_int(self, tag, value):
-        raw = str(value).encode('utf-8')
+        raw = str(value).encode("utf-8")
         self.fields.append((tag, raw))
 
     def append_datetime(self, tag, value=time.time):
         # value should be a time.time() integer value
         if callable(value):
             value = value()
-        if not type(value) is float:
-            raise TypeError('timestamp must be seconds since midnight UTC 1970 '
-                            'from time.time() not {}'.format(type(value)))
-        fmt = time.strftime('%Y%m%d-%H:%M:%S.000', time.gmtime(value))
+        if type(value) is not float:
+            raise TypeError(
+                "timestamp must be seconds since midnight UTC 1970 "
+                "from time.time() not {}".format(type(value))
+            )
+        fmt = time.strftime("%Y%m%d-%H:%M:%S.000", time.gmtime(value))
         self.append(tag, fmt)  # '20150213-15:05:44.079'
 
     def append(self, tag, value):
@@ -263,4 +301,4 @@ class FIXBuilder():
         elif type(value) is bytes:
             self.append_bytes(tag, value)
         else:
-            raise TypeError('No encoder for type {}'.format(type(value)))
+            raise TypeError("No encoder for type {}".format(type(value)))

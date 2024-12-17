@@ -29,12 +29,12 @@ class BusinessRejectError(RuntimeError):
         self.reject_reason = reject_reason
 
 
-class Field():
+class Field:
     def __init__(self, tag, optional=False):
         self.optional = optional
         self.tag = int(tag)
         self._known_as = str(tag)
-        self.dict_key = 'tag{}'.format(self.tag)
+        self.dict_key = "tag{}".format(self.tag)
 
     def known_as(self, known_as):
         self._known_as = known_as
@@ -50,20 +50,22 @@ class Field():
         return parser
 
     def print(self, print_callable=print, depth=0):
-        flags = '?' if self.optional else ''
-        print_callable('  {0}{1.tag:<4}{2:2} {1._known_as}'.format(' |'*depth, self, flags))
+        flags = "?" if self.optional else ""
+        print_callable(
+            "  {0}{1.tag:<4}{2:2} {1._known_as}".format(" |" * depth, self, flags)
+        )
 
 
 class CharField(Field):
     def __init__(self, *args, **kwargs):
-        self.values = kwargs.pop('values', None)
+        self.values = kwargs.pop("values", None)
         super().__init__(*args, **kwargs)
 
     def get_value(self, value_bytes):
         v = value_bytes.decode("utf-8")
         if self.values:
             if v not in self.values:
-                raise ValueError('expected {}'.format(','.join(self.values)))
+                raise ValueError("expected {}".format(",".join(self.values)))
         return v
 
 
@@ -77,48 +79,49 @@ class TimestampField(CharField):
 
 class IntField(Field):
     def __init__(self, *args, **kwargs):
-        self.values = kwargs.pop('values', None)
-        self.min = kwargs.pop('min', -pow(10, 10))
-        self.max = kwargs.pop('max', pow(10, 10))
+        self.values = kwargs.pop("values", None)
+        self.min = kwargs.pop("min", -pow(10, 10))
+        self.max = kwargs.pop("max", pow(10, 10))
         super().__init__(*args, **kwargs)
 
     def get_value(self, value_bytes):
         v = int(value_bytes.decode("utf-8"))
         if v < self.min:
-            raise ValueError('Minimum value {}'.format(self.min))
+            raise ValueError("Minimum value {}".format(self.min))
         if v > self.max:
-            raise ValueError('Maximum value {}'.format(self.max))
+            raise ValueError("Maximum value {}".format(self.max))
         return v
 
 
 class FloatField(Field):
     def __init__(self, *args, **kwargs):
-        self.values = kwargs.pop('values', None)
-        self.min = kwargs.pop('min', -pow(10, 10))
-        self.max = kwargs.pop('max', pow(10, 10))
+        self.values = kwargs.pop("values", None)
+        self.min = kwargs.pop("min", -pow(10, 10))
+        self.max = kwargs.pop("max", pow(10, 10))
         super().__init__(*args, **kwargs)
 
     def get_value(self, value_bytes):
         v = float(value_bytes.decode("utf-8"))
         if v < self.min:
-            raise ValueError('Minimum value {}'.format(self.min))
+            raise ValueError("Minimum value {}".format(self.min))
         if v > self.max:
-            raise ValueError('Maximum value {}'.format(self.max))
+            raise ValueError("Maximum value {}".format(self.max))
         return v
 
 
-class Message():
+class Message:
     """Fields in a message may be ordered (call set_ordered(True) to apply this) in which case:
-        fields added 141,553,554 would match the following
-           141=Y|553=user|554=password
-        if field 553 was created with optional=True, then
-           141=Y|554=password   would match, but
-           554=password|141=Y   would be rejected.
-        The implementation looks at the incoming tags, and maintains an index into the order
-        array. If a field is in-place, we advance the index. Otherwise, look if skipping
-        optional fields would get us back on track. If an optional field occurs behind
-        the current position, or we would need to skip a non-optional field, raise an exception
+    fields added 141,553,554 would match the following
+       141=Y|553=user|554=password
+    if field 553 was created with optional=True, then
+       141=Y|554=password   would match, but
+       554=password|141=Y   would be rejected.
+    The implementation looks at the incoming tags, and maintains an index into the order
+    array. If a field is in-place, we advance the index. Otherwise, look if skipping
+    optional fields would get us back on track. If an optional field occurs behind
+    the current position, or we would need to skip a non-optional field, raise an exception
     """
+
     def __init__(self, msg_type, msg_name, ordered=False):
         self.msg_type = msg_type
         self.msg_name = msg_name
@@ -137,7 +140,9 @@ class Message():
         self._fields.append(field_parser)
         self._field_dict[field_parser.tag] = field_parser
         # pre-compute descriptive ordering for error messages
-        self._fieldorder_desc = ', '.join([str(f.tag) + ('?' if f.optional else '') for f in self._fields])
+        self._fieldorder_desc = ", ".join(
+            [str(f.tag) + ("?" if f.optional else "") for f in self._fields]
+        )
 
     def set_ordered(self, ordered):
         # check all fields mentioned exist, and if we are setting an order that
@@ -157,13 +162,21 @@ class Message():
                 try:
                     msg_parser = msg_parser.parse_field(field_parser, field.bytes())
                 except ValueError as v:
-                    vm = ': {}'.format(v.args[0]) if v.args[0] else ''
+                    vm = ": {}".format(v.args[0]) if v.args[0] else ""
                     raise BusinessRejectError(
-                        'Incorrect value {0.tag}={2} ({0._known_as}) in {1.msg_name}[{1.msg_type}] '
-                        'message{3}'.format(field_parser, self, field.value(), vm), fixmsg)
+                        "Incorrect value {0.tag}={2} ({0._known_as}) in {1.msg_name}[{1.msg_type}] "
+                        "message{3}".format(field_parser, self, field.value(), vm),
+                        fixmsg,
+                    )
             except KeyError:
-                raise RejectError("Unexpected tag {0} found in {1} message".format(
-                    field.tag, self.msg_name), fixmsg, 2, refTagID=field.tag)
+                raise RejectError(
+                    "Unexpected tag {0} found in {1} message".format(
+                        field.tag, self.msg_name
+                    ),
+                    fixmsg,
+                    2,
+                    refTagID=field.tag,
+                )
         msg_parser.on_exit()
 
     def get_field_parser(self, tag):
@@ -173,7 +186,9 @@ class Message():
         return field_parser.parse(field_bytes, self._dd, self)
 
     def on_enter(self, fixmsg, datadict):
-        self._required = collections.OrderedDict([(field.tag, field) for field in self._fields if not field.optional])
+        self._required = collections.OrderedDict(
+            [(field.tag, field) for field in self._fields if not field.optional]
+        )
         self._fixmsg = fixmsg
         self._dd = datadict
         self._position_iter = enumerate(self._fields)
@@ -193,15 +208,23 @@ class Message():
                 else:
                     if not next_expected.optional:
                         raise RejectError(
-                            'Field {0.tag} ({0._known_as}) out of order, expected {1.tag} ({1._known_as})'
-                            ' in {2.msg_name}[{2.msg_type}] message'.
-                            format(field_parser, next_expected, self), fixmsg, 14, refTagID=field_parser.tag)
+                            "Field {0.tag} ({0._known_as}) out of order, expected {1.tag} ({1._known_as})"
+                            " in {2.msg_name}[{2.msg_type}] message".format(
+                                field_parser, next_expected, self
+                            ),
+                            fixmsg,
+                            14,
+                            refTagID=field_parser.tag,
+                        )
             except StopIteration:
                 # reached end of ordered, must be optional field later than specified
                 raise RejectError(
-                    'Optional field {0.tag} ({0._known_as}) out of order, should be {1._fieldorder_desc}'
-                    ' in {1.msg_name}[{1.msg_type}] message'.format(field_parser, self),
-                    fixmsg, 14, refTagID=field_parser.tag)
+                    "Optional field {0.tag} ({0._known_as}) out of order, should be {1._fieldorder_desc}"
+                    " in {1.msg_name}[{1.msg_type}] message".format(field_parser, self),
+                    fixmsg,
+                    14,
+                    refTagID=field_parser.tag,
+                )
 
     def _check_position_at(self, position, field):
         pass
@@ -211,8 +234,13 @@ class Message():
         if self._required:
             missing_field = list(self._required.values())[0]
             raise RejectError(
-                "Required tag {0.tag} ({0._known_as}) missing in {1.msg_name}[{1.msg_type}] message".
-                format(missing_field, self), self._fixmsg, 1, refTagID=missing_field.tag)
+                "Required tag {0.tag} ({0._known_as}) missing in {1.msg_name}[{1.msg_type}] message".format(
+                    missing_field, self
+                ),
+                self._fixmsg,
+                1,
+                refTagID=missing_field.tag,
+            )
 
     def print(self, print_callable=print, depth=0):
         for field in self._fields:
@@ -222,7 +250,7 @@ class Message():
         return self._field_dict[tag_no]
 
 
-class BaseFIXValidator():
+class BaseFIXValidator:
     def __init__(self):
         self._built = False
         self._message_parsers = collections.OrderedDict()
@@ -240,12 +268,12 @@ class BaseFIXValidator():
             raise RejectError("Unsupported MsgType {0.msg_type}".format(msg), msg, 11)
         datadict = {}
         parser.parse_msg(msg, datadict)
-        datadict['msg_type'] = parser.dict_key
+        datadict["msg_type"] = parser.dict_key
         return datadict
 
     def print(self, print_callable=print):
         for k, v in self._message_parsers.items():
-            print_callable('{0.msg_type:2} {0.msg_name}'.format(v))
+            print_callable("{0.msg_type:2} {0.msg_name}".format(v))
             v.print(print_callable, 0)
 
     def add_message_parser(self, parser):
@@ -296,10 +324,14 @@ class RepeatingGroup(Message):
         # validate length matches count
         if not self._count == len(self._rg_list):
             raise RejectError(
-                'Repeating Group \'{0.group_name}\' started by {0._triggering_tag.tag}'
-                '={0._count} ({0._triggering_tag._known_as}) had {1} repeats, not '
-                '{0._count}, in {2.msg_name}[{2.msg_type}] message'.
-                format(self, len(self._rg_list), self._parent), self._fixmsg, 16)
+                "Repeating Group '{0.group_name}' started by {0._triggering_tag.tag}"
+                "={0._count} ({0._triggering_tag._known_as}) had {1} repeats, not "
+                "{0._count}, in {2.msg_name}[{2.msg_type}] message".format(
+                    self, len(self._rg_list), self._parent
+                ),
+                self._fixmsg,
+                16,
+            )
 
     def _check_position_at(self, position, field):
         if not position > self._last_position:
@@ -341,4 +373,4 @@ class RepeatingGroupLengthField(IntField):
 
     def print(self, print_callable=print, depth=0):
         IntField.print(self, print_callable, depth)
-        self._repeatingGroupParser.print(print_callable, depth+1)
+        self._repeatingGroupParser.print(print_callable, depth + 1)
