@@ -133,3 +133,9 @@ class FIX44Spec(FIX44BaseSpec):
         EncryptMethod = CharField(98, values=["0"])
         HeartbeatInt = IntField(108, min=1, max=120)
         Text = StringField(58, optional=True)
+
+
+if __name__ == "__main__":
+    bfv = FIX44Spec()
+    v = bfv.build()
+    v.print()

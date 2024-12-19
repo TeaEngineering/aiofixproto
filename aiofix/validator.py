@@ -51,8 +51,9 @@ class Field:
 
     def print(self, print_callable=print, depth=0):
         flags = "?" if self.optional else ""
+        dent = " |" * depth
         print_callable(
-            "  {0}{1.tag:<4}{2:2} {1._known_as}".format(" |" * depth, self, flags)
+            f"  {dent}{self.tag:<4}{flags:2} {self._known_as:20} {self.dict_key:26} {type(self).__name__:26}"
         )
 
 
@@ -275,6 +276,7 @@ class BaseFIXValidator:
         for k, v in self._message_parsers.items():
             print_callable("{0.msg_type:2} {0.msg_name}".format(v))
             v.print(print_callable, 0)
+            print_callable()
 
     def add_message_parser(self, parser):
         if self._message_parsers.get(parser.msg_type, None):
