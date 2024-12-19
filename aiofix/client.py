@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import logging
 
-from aiofix.engine_streams import StreamFIXConnection, StreamFIXSession, BaseMonitor
+from aiofix.engine_streams import BaseMonitor, StreamFIXConnection, StreamFIXSession
 from aiofix.spec import FIX44Spec
 
 

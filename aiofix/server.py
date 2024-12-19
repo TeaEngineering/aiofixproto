@@ -1,11 +1,12 @@
+import argparse
 import asyncio
 import logging
-import argparse
+
 from aiofix.engine_streams import (
     BaseApplication,
-    StreamFIXSession,
     BaseMonitor,
     LoginError,
+    StreamFIXSession,
 )
 
 

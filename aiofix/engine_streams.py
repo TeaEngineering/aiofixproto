@@ -1,22 +1,21 @@
 import asyncio
-import time
 import collections
-import uuid
 import inspect
 import logging
-from contextlib import closing
+import time
+import uuid
+from contextlib import asynccontextmanager, closing
 
+from aiofix import msgtype, tags
 from aiofix.message import (
     PEEK_SIZE,
-    peek_length,
+    FIXBuilder,
     FIXMessageIn,
     GarbageBufferError,
-    FIXBuilder,
+    peek_length,
 )
 from aiofix.spec import FIX44Spec
-from aiofix import msgtype, tags
 from aiofix.validator import BusinessRejectError, RejectError
-from contextlib import asynccontextmanager
 
 
 class LoginError(RuntimeError):

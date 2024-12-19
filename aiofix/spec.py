@@ -2,11 +2,14 @@ import inspect
 
 from aiofix.validator import (
     BaseFIXValidator,
+    CharField,
+    Field,
+    IntField,
     Message,
     RepeatingGroup,
     RepeatingGroupLengthField,
+    StringField,
 )
-from aiofix.validator import CharField, IntField, StringField, Field
 
 """
 A spec is a way to capture a fix specification document in code. The spec

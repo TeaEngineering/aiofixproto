@@ -1,6 +1,7 @@
-from aiofix import message
-import unittest
 import time
+import unittest
+
+from aiofix import message
 
 
 def builder_for_connection(connection, msgtype):

@@ -1,6 +1,7 @@
 import collections
-import inflection
 import itertools
+
+import inflection
 
 """
 FIXValidators take wire message (FIXMessageIn) delimited fields and produce

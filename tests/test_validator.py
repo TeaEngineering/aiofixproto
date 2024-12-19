@@ -1,6 +1,7 @@
-from aiofix import message, validator
 import re
 import unittest
+
+from aiofix import message, validator
 
 
 class TestValidators(unittest.TestCase):
