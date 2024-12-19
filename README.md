@@ -1,5 +1,7 @@
-aiofixproto
-----
+![Python versions](https://img.shields.io/pypi/pyversions/aiofixproto.svg) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/TeaEngineering/aiofixproto/check.yml) [![PyPI version](https://badge.fury.io/py/aiofixproto.svg)](https://badge.fury.io/py/aiofixproto)
+
+# aiofixproto
+
 This is a toy FIX protocol server/client used to test various other systems over the years.
 
 In particular the server component can deliver precise Rejects/BusinessMessageRejects for malformed custom messages with little extra code.
@@ -16,7 +18,7 @@ In particular the server component can deliver precise Rejects/BusinessMessageRe
     INFO:fix-1-127.0.0.1:8888:Socket connected
 
 
-Supported FIX versions
-----
+## Supported FIX versions
 * FIX42
 * FIX44
+

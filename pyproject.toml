@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64.0", "setuptools_scm[toml]>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[project]
+name = "aiofixproto"
+authors = [
+  { name="Chris Shucksmith", email="chris@shucksmith.co.uk" },
+]
+description = "Speak FIX using asyncio"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/TeaEngineering/aiofixproto"
+Issues = "https://github.com/TeaEngineering/aiofixproto/issues"

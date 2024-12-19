@@ -1,9 +1,9 @@
 import unittest
-from . import spec
+from aiofix.spec import FIX44Spec
 
 
 class TestSpec(unittest.TestCase):
     def test_nestedclass_validator(self):
-        bfv = spec.FIX44Spec()
+        bfv = FIX44Spec()
         v = bfv.build()
         v.print()

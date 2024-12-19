@@ -1,4 +1,4 @@
-from . import message
+from aiofix import message
 import unittest
 import time
 

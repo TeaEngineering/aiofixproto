@@ -1,4 +1,4 @@
-from . import message, validator
+from aiofix import message, validator
 import re
 import unittest
 
