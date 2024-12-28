@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager, closing
+from typing import Any, Optional, Iterable, Callable
 
 from aiofix import msgtype, tags
 from aiofix.message import (
@@ -15,7 +16,7 @@ from aiofix.message import (
     peek_length,
 )
 from aiofix.spec import FIX44Spec
-from aiofix.validator import BusinessRejectError, RejectError
+from aiofix.validator import BusinessRejectError, RejectError, BaseFIXValidator
 
 
 class LoginError(RuntimeError):
@@ -24,19 +25,19 @@ class LoginError(RuntimeError):
 
 # StreamFIXSession subclasses throw this to send a BusinessMessageReject
 class BusinessMessageReject(RuntimeError):
-    def __init__(self, message, ref_id="N/A", reject_reason=0):
+    def __init__(self, message: FIXMessageIn, ref_id: str="N/A", reject_reason: int=0):
         super().__init__(message)
         self.reject_ref_id = ref_id
         self.reject_reason = reject_reason
 
 
 class BaseApplication:
-    def __init__(self, spec=FIX44Spec, our_comp="SERVER"):
+    def __init__(self, spec=FIX44Spec, our_comp: str="SERVER"):
         self.spec = spec
         self.our_comp = our_comp
         self.monitor = None
 
-    async def checkLogin(self, fix_msg, connection):
+    async def checkLogin(self, fix_msg: FIXMessageIn, connection: StreamFIXConnection) -> StreamFIXSession:
         my_validator = self.spec().build()
         data = my_validator.validate(fix_msg)
 
@@ -57,9 +58,9 @@ class BaseApplication:
         # Now validate the provided username/password
         return await self.check_credentials_create_session(data, kwargs)
 
-    def check_components(self, fix_msg, target=None, sender=None):
-        senderCompID = None
-        targetCompID = None
+    def check_components(self, fix_msg: FIXMessageIn, target: str=None, sender: str=None) -> Iterable[tuple[int, str]]:
+        senderCompID: Optional[str] = None
+        targetCompID: Optional[str] = None
         for field in fix_msg.session_tags():
             if field.tag == tags.SenderCompID:
                 if senderCompID:
@@ -83,12 +84,14 @@ class BaseApplication:
             )
 
         # now pack in wire order from *our* perspective
+        assert targetCompID
+        assert senderCompID
         return [(tags.SenderCompID, targetCompID), (tags.TargetCompID, senderCompID)]
 
-    async def check_credentials_create_session(self, data, kwargs):
+    async def check_credentials_create_session(self, data: dict[str, Any], kwargs) -> StreamFIXSession:
         raise LoginError("Incorrect login")
 
-    async def handle_stream_pair(self, reader, writer):
+    async def handle_stream_pair(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         fixconnection = StreamFIXConnection(
             reader, writer, self.monitor, application=self
         )
@@ -98,12 +101,12 @@ class BaseApplication:
 class StreamFIXSession:
     def __init__(
         self,
-        version=0,
-        validator=None,
+        version: int=0,
+        validator: BaseFIXValidator=None,
         components=None,
         logger=None,
-        hb_interval=5,
-        clock=time.time,
+        hb_interval: int=5,
+        clock: Callable[[],float]=time.time,
     ):
         self.logger = logger
         self.validator = validator
@@ -138,14 +141,14 @@ class StreamFIXSession:
         else:
             raise RuntimeError(f"No async handler defined for {data["msg_type"]}")
 
-    async def _post_connect(self):
+    async def _post_connect(self) -> None:
         self.logger.info(
             f"post_connect (client) reached - hb_interval={self.hb_interval}"
         )
         await self.post_connect()
         await self.send_login()
 
-    async def _post_login(self):
+    async def _post_login(self) -> None:
         self.logger.info(
             f"post_login (server) reached - hb_interval={self.hb_interval}"
         )
@@ -153,17 +156,17 @@ class StreamFIXSession:
         await self.send_login()
         self.logon_recieved = True
 
-    async def post_login(self):
+    async def post_login(self) -> None:
         pass
 
-    async def post_connect(self):
+    async def post_connect(self) -> None:
         pass
 
-    async def post_disconnect(self):
+    async def post_disconnect(self) -> None:
         self.logger.info("post_disconnect (server) reached")
 
     @asynccontextmanager
-    async def send_message(self, msg_type, msgseqnum=None):
+    async def send_message(self, msg_type: int, msgseqnum: Optional[int]=None):
         delta = 0
         if msgseqnum is None:
             msgseqnum = self.nextOutbound
@@ -177,13 +180,13 @@ class StreamFIXSession:
         self.last_outbound = self.clock()
         await self.writer.send(outmsg)
 
-    async def send_login(self):
+    async def send_login(self) -> None:
         async with self.send_message(msgtype.Logon) as builder:
             builder.append(tags.HeartBtInt, self.hb_interval)
             builder.append(tags.EncryptMethod, "0")  # no encryption
             self.embellish_logon(builder)
 
-    async def send_business_message_reject(self, bmr):
+    async def send_business_message_reject(self, bmr: BusinessRejectError) -> None:
         # 45 RefSeqNum @RefSeqNum MsgSeqNum of rejected message
         # 372 RefMsgType @RefMsgType The MsgType of the FIX message being referenced.
         # 1130  RefApplVerID @RefApplVerID
@@ -210,7 +213,7 @@ class StreamFIXSession:
             builder.append(tags.BusinessRejectReason, bmr.reject_reason)
             builder.append(tags.Text, str(bmr))
 
-    async def send_reject(self, rej):
+    async def send_reject(self, rej: RejectError) -> None:
         # 45 RefSeqNum @RefSeqNum MsgSeqNum of rejected message
         # 372 RefMsgType @RefMsgType The MsgType of the FIX message being referenced.
         # 371 RefTagID @RefTagID The tag number of the FIX field being referenced.
@@ -239,13 +242,13 @@ class StreamFIXSession:
         async with self.send_message(msgtype.Reject) as builder:
             builder.append(tags.RefSeqNum, rej.fixMsg.seqnum)
             builder.append(tags.RefMsgType, rej.fixMsg.msg_type)
-            if rej.tagID:
-                builder.append(tags.RefTagID, rej.tagID)
+            if rej.refTagID:
+                builder.append(tags.RefTagID, rej.refTagID)
             if rej.sessionRejectReason:
                 builder.append(tags.SessionRejectReason, rej.sessionRejectReason)
             builder.append(tags.Text, str(rej))
 
-    async def await_heartbeat(self):
+    async def await_heartbeat(self) -> None:
         while True:
             # as we sleep for one second, send heartbeat if were within 1 seconds of the hb_interval
             # and allow one second as "some reasonable transmission time"
@@ -278,27 +281,27 @@ class StreamFIXSession:
             except Exception:
                 self.logger.exception("tx heartbeat aborted")
 
-    def embellish_logon(self, outbound):
+    def embellish_logon(self, outbound: FIXBuilder) -> None:
         pass
 
-    async def read_loop_closed(self):
+    async def read_loop_closed(self) -> None:
         self.heartbeat_task.cancel()
         await self.post_disconnect()
 
-    async def on_logon_message(self, msg, data):
+    async def on_logon_message(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         self.logon_recieved = True
 
-    async def on_heartbeat(self, msg, data):
+    async def on_heartbeat(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         if data.get("test_req_id"):
             self.logger.info(f"Recieved heartbeat response to test request {data}")
 
-    async def on_logout_message(self, msg, data):
+    async def on_logout_message(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         self.logon_recieved = False
         if not self.logout_sent:  # send recripricol Logout
             async with self.send_message(msgtype.Logout):
                 pass
 
-    async def on_test_request(self, msg, data):
+    async def on_test_request(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         if self.logon_recieved:
             self.logger.info(
                 f"Responding to test request with ID {data["test_req_id"]}"
@@ -310,10 +313,10 @@ class StreamFIXSession:
                 f"Ignoring test request {data["test_req_id"]} as no logon recieved"
             )
 
-    async def on_reject(self, msg, data):
+    async def on_reject(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         self.logger.info(f"Recieved message Reject: {data}")
 
-    async def on_resend_request(self, msg, data):
+    async def on_resend_request(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         self.logger.info(
             f"Recieved ResendRequest {data}, out nextOutbound is {self.nextOutbound}"
         )
@@ -339,7 +342,7 @@ class StreamFIXConnection:
 
     counter = 0
 
-    def __init__(self, reader, writer, monitor, application=None, session=None):
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, monitor, application=None, session=None):
         StreamFIXConnection.counter += 1
         addr = writer.get_extra_info("peername")
         self.connection_id = f"fix-{self.counter}-{addr[0]}:{addr[1]}"
@@ -354,7 +357,7 @@ class StreamFIXConnection:
             session.writer = self
             session.logger = self.logger
 
-    async def read_loop(self):
+    async def read_loop(self) -> None:
         self.logger.debug("Socket (early) connected")
         if self.session:
             await self.session._post_connect()
@@ -411,7 +414,7 @@ class StreamFIXConnection:
         if self.session:
             await self.session.read_loop_closed()
 
-    async def await_logon_timeout(self):
+    async def await_logon_timeout(self) -> None:
         try:
             await asyncio.sleep(15)
             if not self.session and self.writer:
@@ -421,7 +424,7 @@ class StreamFIXConnection:
         except Exception:
             self.logger.exception("timeout aborting")
 
-    async def handle_incoming(self, fix_msg):
+    async def handle_incoming(self, fix_msg: FIXMessageIn) -> None:
         if self.session:
             await self.session.handle_incoming(fix_msg)
         else:
@@ -437,15 +440,15 @@ class StreamFIXConnection:
             else:
                 raise LoginError("First message not Logon", fix_msg)
 
-    async def send(self, outmsg):
+    async def send(self, outmsg: FIXMessageIn) -> None:
         if self.writer:
             self.logger.debug(f"sending {outmsg.buffer}")
             self.writer.write(outmsg.buffer)
 
-    def time(self):
+    def time(self) -> float:
         return time.time()
 
-    async def post_connect(self):
+    async def post_connect(self) -> None:
         pass
 
 
@@ -466,7 +469,7 @@ class BaseMonitor(collections.abc.MutableMapping):
     def __iter__(self):
         return iter(self.store)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.store)
 
     def addHandlers(self, key, logger):

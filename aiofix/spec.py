@@ -24,20 +24,21 @@ the corresponding validator.
 
 
 class ClassFIXSpec:
-    def build(self):
+    def build(self) -> BaseFIXValidator:
         validator = BaseFIXValidator()
         for d in dir(self):
             o = getattr(self, d)
             if inspect.isclass(o) and not d == "__class__":
                 # nest classes inside me are Messages, build them
                 # print('{} {}'.format(d, type(o)))
-                msgtype = None
+                msgtype: str = ""
                 rpts = []
                 fields = []
                 for value in [x for x in dir(o) if not x.startswith("_")]:
                     o2 = getattr(o, value)
                     # print('  {} {}'.format(value, type(o2)))
                     if value == "msgtype":
+                        assert isinstance(o2, str)
                         msgtype = o2
                     elif isinstance(o2, Field):
                         fields.append(o2.known_as(value))

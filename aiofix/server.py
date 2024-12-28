@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+from typing import Any
 
 from aiofix.engine_streams import (
     BaseApplication,
@@ -11,13 +12,13 @@ from aiofix.engine_streams import (
 
 
 class TestApplication(BaseApplication):
-    async def check_credentials_create_session(self, data, kwargs):
+    async def check_credentials_create_session(self, data: dict[str, Any], kwargs: Any) -> StreamFIXSession:
         if data["username"] == "hello" and data["password"] == "world":
             return StreamFIXSession(**kwargs)
         raise LoginError("Incorrect login")
 
 
-async def main():
+async def main() -> None:
     application = TestApplication()
     monitor = BaseMonitor()
     application.monitor = monitor
