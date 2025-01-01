@@ -15,7 +15,7 @@ structually correct, complete and may be cleanly iterated over.
 
 import logging
 import time
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Optional
 
 
 def from_delim(text: str, delim: str = "|") -> "FIXMessageIn":
@@ -247,11 +247,12 @@ class FIXBuilder:
             raise ValueError("Bad message type, must be 1 or 2 chars")
         self.fields: list[tuple[int, bytes]] = []
         self.version = version
+        self.clock = clock
         self.append(35, msgtype)
         for k, v in components:
             self.append(k, v)
         self.append(34, msgseqnum)
-        self.append_datetime(52, clock)
+        self.append_datetime(52, None)
 
     def finish(self) -> FIXMessageIn:
         body = b"".join(
@@ -292,13 +293,11 @@ class FIXBuilder:
         raw = str(value).encode("utf-8")
         self.fields.append((tag, raw))
 
-    def append_datetime(
-        self, tag: int, value: float | int | Callable[[], float] = time.time
-    ) -> None:
+    def append_datetime(self, tag: int, value: Optional[float] = None) -> None:
         # value should be a time.time() integer value
         iv: float = 0.0
-        if callable(value):
-            iv = value()
+        if value is None:
+            iv = self.clock()
         else:
             iv = float(value)
         if type(iv) is not float:
