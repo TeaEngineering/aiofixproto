@@ -5,23 +5,19 @@ from typing import Any
 
 from aiofix.engine_streams import (
     BaseApplication,
-    BaseMonitor,
-    LoginError,
-    StreamFIXSession,
 )
 
 
 class TestApplication(BaseApplication):
-    async def check_credentials_create_session(self, data: dict[str, Any], kwargs: Any) -> StreamFIXSession:
-        if data["username"] == "hello" and data["password"] == "world":
-            return StreamFIXSession(**kwargs)
-        raise LoginError("Incorrect login")
+    async def check_credentials(self, data: dict[str, Any]) -> bool:
+        if data["username"] == "hello":
+            if data["password"] == "world":
+                return True
+        return False
 
 
 async def main() -> None:
     application = TestApplication()
-    monitor = BaseMonitor()
-    application.monitor = monitor
     server = await asyncio.start_server(
         application.handle_stream_pair, "127.0.0.1", 8888
     )

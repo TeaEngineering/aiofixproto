@@ -58,7 +58,7 @@ class ClassFIXSpec:
 
                     # pull out fields for the repeating group
                     rg_fields = {}
-                    counter = 0
+                    counter = (0, "default")
                     ordering = None
                     for value in [x for x in dir(v) if not x.startswith("_")]:
                         o2 = getattr(v, value)

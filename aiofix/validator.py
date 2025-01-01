@@ -1,7 +1,8 @@
-import collections
 import itertools
-from typing import Optional, Any, Callable
+from typing import Any, Callable, Optional
+
 import inflection
+
 from aiofix.message import FIXMessageIn, FIXValue
 
 """
@@ -16,23 +17,35 @@ generate decent Reject/BMR messages.
 
 
 class RejectError(RuntimeError):
-    def __init__(self, message: str, fixMsg: FIXMessageIn, sessionRejectReason: Optional[int]=None, refTagID: Optional[int]=None):
-        super().__init__(message)
+    def __init__(
+        self,
+        text: str,
+        fixMsg: FIXMessageIn,
+        sessionRejectReason: Optional[int] = None,
+        refTagID: Optional[int] = None,
+    ):
+        super().__init__(text)
         self.fixMsg = fixMsg
         self.refTagID = None
         self.sessionRejectReason = sessionRejectReason
 
 
 class BusinessRejectError(RuntimeError):
-    def __init__(self, message: str, fixMsg: FIXMessageIn, ref_id: str="N/A", reject_reason: int=0):
-        super().__init__(message)
+    def __init__(
+        self,
+        text: str,
+        fixMsg: FIXMessageIn,
+        ref_id: str = "N/A",
+        reject_reason: int = 0,
+    ):
+        super().__init__(text)
         self.fixMsg = fixMsg
         self.reject_ref_id = ref_id
         self.reject_reason = reject_reason
 
 
 class Field:
-    def __init__(self, tag: int, optional: bool=False):
+    def __init__(self, tag: int, optional: bool = False):
         self.optional = optional
         self.tag = int(tag)
         self._known_as = str(tag)
@@ -46,12 +59,16 @@ class Field:
     def get_value(self, value_bytes: bytes) -> Any:
         return value_bytes.decode("utf-8")
 
-    def parse(self, value_bytes: bytes, parsed_dict: dict[str, Any], parser: "Message") -> "Message":
+    def parse(
+        self, value_bytes: bytes, parsed_dict: dict[str, Any], parser: "Message"
+    ) -> "Message":
         # add our own data to dict, and return (or substitute) parser for next tag
         parsed_dict[self.dict_key] = self.get_value(value_bytes)
         return parser
 
-    def print(self, print_callable: Callable[[str],None]=print, depth: int=0) -> None:
+    def print(
+        self, print_callable: Callable[[str], None] = print, depth: int = 0
+    ) -> None:
         flags = "?" if self.optional else ""
         dent = " |" * depth
         print_callable(
@@ -60,7 +77,9 @@ class Field:
 
 
 class CharField(Field):
-    def __init__(self, tag: int, optional: bool=False, values: Optional[list[str]] = None):
+    def __init__(
+        self, tag: int, optional: bool = False, values: Optional[list[str]] = None
+    ):
         self.values = values
         super().__init__(tag, optional)
 
@@ -81,7 +100,14 @@ class TimestampField(CharField):
 
 
 class IntField(Field):
-    def __init__(self, tag: int, optional: bool=False, values: Optional[list[str]] = None, min: int=-pow(10, 10), max: int=pow(10, 10)):
+    def __init__(
+        self,
+        tag: int,
+        optional: bool = False,
+        values: Optional[list[str]] = None,
+        min: int = -pow(10, 10),
+        max: int = pow(10, 10),
+    ):
         self.values = values
         self.min = min
         self.max = max
@@ -97,7 +123,14 @@ class IntField(Field):
 
 
 class FloatField(Field):
-    def __init__(self, tag: int, optional: bool=False, values: Optional[list[str]] = None, min: int=-pow(10, 10), max: int=pow(10, 10)):
+    def __init__(
+        self,
+        tag: int,
+        optional: bool = False,
+        values: Optional[list[str]] = None,
+        min: int = -pow(10, 10),
+        max: int = pow(10, 10),
+    ):
         self.values = values
         self.min = min
         self.max = max
@@ -125,7 +158,7 @@ class Message:
     the current position, or we would need to skip a non-optional field, raise an exception
     """
 
-    def __init__(self, msg_type: str, msg_name: str, ordered: bool=False):
+    def __init__(self, msg_type: str, msg_name: str, ordered: bool = False):
         self.msg_type = msg_type
         self.msg_name = msg_name
         self.dict_key = inflection.underscore(msg_name)
@@ -189,13 +222,17 @@ class Message:
     def parse_field(self, field_parser: Field, field_bytes: bytes) -> "Message":
         return field_parser.parse(field_bytes, self._dd, self)
 
-    def on_enter(self, fixmsg: FIXMessageIn, datadict: dict[str,Any]) -> None:
-        self._required = {  field.tag: field for field in self._fields if not field.optional}
+    def on_enter(self, fixmsg: FIXMessageIn, datadict: dict[str, Any]) -> None:
+        self._required = {
+            field.tag: field for field in self._fields if not field.optional
+        }
         self._fixmsg = fixmsg
         self._dd = datadict
         self._position_iter = enumerate(self._fields)
 
-    def _check_position(self, field: FIXValue, field_parser: Field, fixmsg: FIXMessageIn) -> None:
+    def _check_position(
+        self, field: FIXValue, field_parser: Field, fixmsg: FIXMessageIn
+    ) -> None:
         self._required.pop(field.tag, None)
         # validate ordering (optional, but mandatory in repeating groups)
         if not self._ordered:
@@ -247,7 +284,9 @@ class Message:
                 refTagID=missing_field.tag,
             )
 
-    def print(self, print_callable: Callable[[str],None]=print, depth: int=0) -> None:
+    def print(
+        self, print_callable: Callable[[str], None] = print, depth: int = 0
+    ) -> None:
         for field in self._fields:
             field.print(print_callable, depth)
 
@@ -271,12 +310,12 @@ class BaseFIXValidator:
         parser = self._message_parsers.get(msg.msg_type)
         if parser is None:
             raise RejectError("Unsupported MsgType {0.msg_type}".format(msg), msg, 11)
-        datadict: dict[str,Any] = {}
+        datadict: dict[str, Any] = {}
         parser.parse_msg(msg, datadict)
         datadict["msg_type"] = parser.dict_key
         return datadict
 
-    def print(self, print_callable:Callable[[str],None]=print) -> None:
+    def print(self, print_callable: Callable[[str], None] = print) -> None:
         for k, v in self._message_parsers.items():
             print_callable("{0.msg_type:2} {0.msg_name}".format(v))
             v.print(print_callable, 0)
@@ -292,7 +331,7 @@ class BaseFIXValidator:
 
 
 class RepeatingGroup(Message):
-    def __init__(self, parent: Message, group_name: str="groupName"):
+    def __init__(self, parent: Message, group_name: str = "groupName"):
         Message.__init__(self, parent.msg_type, parent.msg_name, True)
         self._parent = parent
         self.group_name = group_name
@@ -305,14 +344,20 @@ class RepeatingGroup(Message):
     def set_ordered(self, ordered: bool) -> None:
         raise RuntimeError("Repeating groups must be ordered")
 
-    def prepare_for_repeat(self, count: int, parent_parser: Message, rg_list: list[dict[str,Any]], triggeringTag: Field) -> None:
+    def prepare_for_repeat(
+        self,
+        count: int,
+        parent_parser: Message,
+        rg_list: list[dict[str, Any]],
+        triggeringTag: Field,
+    ) -> None:
         assert parent_parser._fixmsg
         self._parent_parser = parent_parser
         self._count = count
         self._rg_list = rg_list
         self._triggering_tag = triggeringTag
         self.on_enter(parent_parser._fixmsg, {})
-        self._position_iter = itertools.cycle(enumerate(self._fields))
+        self._position_iter = itertools.cycle(enumerate(self._fields))  # type: ignore[assignment]
         self._last_position = -1
 
     def get_field_parser(self, tag: int) -> tuple[Field, Message]:
@@ -372,13 +417,21 @@ class RepeatingGroup(Message):
 
 # use min=1 to enforce at least one repeating group
 class RepeatingGroupLengthField(IntField):
-    def __init__(self, tag: int, repeatingGroupParser: RepeatingGroup, min: int=0, max: int=pow(10, 10)):
+    def __init__(
+        self,
+        tag: int,
+        repeatingGroupParser: RepeatingGroup,
+        min: int = 0,
+        max: int = pow(10, 10),
+    ):
         super().__init__(tag, min=min, max=max)
         self._repeatingGroupParser = repeatingGroupParser
         if not self._repeatingGroupParser.dict_key:
             raise RuntimeError("No dict_key set on RepeatingGroup")
 
-    def parse(self, value_bytes: bytes, parsed_dict: dict[str, Any], parser: Message) -> Message:
+    def parse(
+        self, value_bytes: bytes, parsed_dict: dict[str, Any], parser: Message
+    ) -> Message:
         self._parentParser = parser
         count = self.get_value(value_bytes)
         rg_list: list[Any] = []
@@ -388,6 +441,8 @@ class RepeatingGroupLengthField(IntField):
             return self._repeatingGroupParser
         return parser
 
-    def print(self, print_callable:Callable[[str],None]=print, depth: int=0) -> None:
+    def print(
+        self, print_callable: Callable[[str], None] = print, depth: int = 0
+    ) -> None:
         IntField.print(self, print_callable, depth)
         self._repeatingGroupParser.print(print_callable, depth + 1)

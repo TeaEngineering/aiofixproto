@@ -2,9 +2,9 @@ import argparse
 import asyncio
 import logging
 
-from aiofix.engine_streams import BaseMonitor, StreamFIXConnection, StreamFIXSession
-from aiofix.spec import FIX44Spec
+from aiofix.engine_streams import StreamFIXConnection, StreamFIXSession
 from aiofix.message import FIXBuilder
+from aiofix.spec import FIX44Spec
 
 
 class TestStreamFIXSession(StreamFIXSession):
@@ -13,7 +13,7 @@ class TestStreamFIXSession(StreamFIXSession):
         self.password = password
         validator = FIX44Spec().build()
         components = [(49, self.username), (56, "SERVER")]
-        super().__init__(44, validator, components, logger=None)
+        super().__init__(44, validator, components)
 
     def embellish_logon(self, builder: FIXBuilder) -> None:
         builder.append(553, self.username)
@@ -34,9 +34,7 @@ if __name__ == "__main__":
     async def connect() -> None:
         reader, writer = await asyncio.open_connection(host=args.host, port=args.port)
         session = TestStreamFIXSession(username=args.username, password=args.password)
-        fixconnection = StreamFIXConnection(
-            reader, writer, monitor=BaseMonitor(), session=session
-        )
+        fixconnection = StreamFIXConnection(reader, writer, session=session)
         await fixconnection.read_loop()
 
     asyncio.run(connect())

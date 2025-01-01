@@ -1,11 +1,10 @@
 import asyncio
-import collections
 import inspect
 import logging
 import time
 import uuid
 from contextlib import asynccontextmanager, closing
-from typing import Any, Optional, Iterable, Callable
+from typing import Any, AsyncGenerator, Callable, Iterable, Optional
 
 from aiofix import msgtype, tags
 from aiofix.message import (
@@ -15,50 +14,54 @@ from aiofix.message import (
     GarbageBufferError,
     peek_length,
 )
-from aiofix.spec import FIX44Spec
-from aiofix.validator import BusinessRejectError, RejectError, BaseFIXValidator
+from aiofix.spec import ClassFIXSpec, FIX44Spec
+from aiofix.validator import BaseFIXValidator, BusinessRejectError, RejectError
 
 
 class LoginError(RuntimeError):
     pass
 
 
-# StreamFIXSession subclasses throw this to send a BusinessMessageReject
-class BusinessMessageReject(RuntimeError):
-    def __init__(self, message: FIXMessageIn, ref_id: str="N/A", reject_reason: int=0):
-        super().__init__(message)
-        self.reject_ref_id = ref_id
-        self.reject_reason = reject_reason
-
-
 class BaseApplication:
-    def __init__(self, spec=FIX44Spec, our_comp: str="SERVER"):
-        self.spec = spec
-        self.our_comp = our_comp
-        self.monitor = None
+    def __init__(
+        self,
+        spec: type[ClassFIXSpec] = FIX44Spec,
+        our_comp: str = "SERVER",
+        validator: Optional[BaseFIXValidator] = None,
+    ):
+        if validator is not None:
+            self.validator = validator
+        else:
+            self.validator = spec().build()
 
-    async def checkLogin(self, fix_msg: FIXMessageIn, connection: StreamFIXConnection) -> StreamFIXSession:
-        my_validator = self.spec().build()
-        data = my_validator.validate(fix_msg)
+        self.our_comp = our_comp
+        self.connections: list[StreamFIXConnection] = []
+
+    async def checkLogin(
+        self, fix_msg: FIXMessageIn, connection: "StreamFIXConnection"
+    ) -> "StreamFIXSession":
+        data = self.validator.validate(fix_msg)
 
         # we'll accept any senderComp so long as it matches the username
-        components = self.check_components(
-            fix_msg, target=self.our_comp, sender=data["username"]
-        )
+        components = self.parse_components(fix_msg, data)
         hb_interval = data["heartbeat_int"]
 
-        kwargs = {
-            "logger": connection.logger,
-            "hb_interval": hb_interval,
-            "version": fix_msg.version,
-            "validator": my_validator,
-            "components": components,
-        }
+        # validate the provided username/password (can be async)
+        if not await self.check_credentials(data):
+            raise LoginError("Incorrect login")
 
-        # Now validate the provided username/password
-        return await self.check_credentials_create_session(data, kwargs)
+        return StreamFIXSession(
+            logger=connection.logger,
+            hb_interval=hb_interval,
+            version=fix_msg.version,
+            validator=self.validator,
+            components=components,
+        )
 
-    def check_components(self, fix_msg: FIXMessageIn, target: str=None, sender: str=None) -> Iterable[tuple[int, str]]:
+    def parse_components(
+        self, fix_msg: FIXMessageIn, data: dict[str, Any]
+    ) -> Iterable[tuple[int, str]]:
+        # validator does not write session tags to data dictionary, re-parse
         senderCompID: Optional[str] = None
         targetCompID: Optional[str] = None
         for field in fix_msg.session_tags():
@@ -70,76 +73,83 @@ class BaseApplication:
                 if targetCompID:
                     raise LoginError("duplicate targetCompID")
                 targetCompID = field.value()
+
         if not senderCompID:
             raise LoginError("missing senderCompID on Logon")
         if not targetCompID:
             raise LoginError("missing targetCompID on Logon")
-        if targetCompID != target:
+
+        # raise LoginError if component not acceptable
+        self.check_components(senderCompID, targetCompID, data)
+
+        # pack in wire order from *our* perspective
+        assert targetCompID
+        assert senderCompID
+        return [(tags.SenderCompID, targetCompID), (tags.TargetCompID, senderCompID)]
+
+    def check_components(
+        self, senderCompID: str, targetCompID: str, data: dict[str, Any]
+    ) -> None:
+        if targetCompID != self.our_comp:
             raise LoginError(
-                f"incorrect targetCompID, expected {target} recieved {targetCompID}"
+                f"incorrect targetCompID, expected {self.our_comp} recieved {targetCompID}"
             )
+        sender = data["username"]
         if senderCompID != sender:
             raise LoginError(
                 f"incorrect senderCompID, expected {sender} recieved {senderCompID}"
             )
 
-        # now pack in wire order from *our* perspective
-        assert targetCompID
-        assert senderCompID
-        return [(tags.SenderCompID, targetCompID), (tags.TargetCompID, senderCompID)]
+    async def check_credentials(self, data: dict[str, Any]) -> bool:
+        return False
 
-    async def check_credentials_create_session(self, data: dict[str, Any], kwargs) -> StreamFIXSession:
-        raise LoginError("Incorrect login")
-
-    async def handle_stream_pair(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        fixconnection = StreamFIXConnection(
-            reader, writer, self.monitor, application=self
-        )
+    async def handle_stream_pair(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        fixconnection = StreamFIXConnection(reader, writer, application=self)
+        self.connections.append(fixconnection)
         await fixconnection.read_loop()
+        self.connections.remove(fixconnection)
 
 
 class StreamFIXSession:
     def __init__(
         self,
-        version: int=0,
-        validator: BaseFIXValidator=None,
-        components=None,
-        logger=None,
-        hb_interval: int=5,
-        clock: Callable[[],float]=time.time,
+        version: int,
+        validator: BaseFIXValidator,
+        components: Iterable[tuple[int, str]],
+        logger: Optional[logging.Logger] = None,
+        hb_interval: int = 5,
+        clock: Callable[[], float] = time.time,
     ):
-        self.logger = logger
+        if logger:
+            self.logger = logger
+        else:
+            sid = "fixsession-" + "-".join(s for i, s in components)
+            self.logger = logging.getLogger(sid)
         self.validator = validator
-        self.nextOutbound = 1
-        self.expectedInbound = 1
-        self.components = components
+        self.components = [(i, s.encode()) for i, s in components]
         self.version = version
-        self.heartbeat_task = asyncio.ensure_future(self.await_heartbeat())
         self.hb_interval = hb_interval
         self.clock = clock
-        self.writer = None
+
+        self.nextOutbound = 1
+        self.expectedInbound = 1
+        self.heartbeat_task = asyncio.ensure_future(self.await_heartbeat())
+        self.writer: "Optional[StreamFIXConnection]" = None
         self.last_outbound = self.clock()
         self.last_inbound = self.clock()
         self.logon_recieved = False
         self.logout_sent = False
 
-    async def handle_incoming(self, fix_msg):
+    async def handle_incoming(self, fix_msg: FIXMessageIn) -> None:
         data = self.validator.validate(fix_msg)
         self.last_inbound = self.clock()
         c = getattr(self, "on_" + data["msg_type"])
         if inspect.iscoroutinefunction(c):
-            try:
-                await c(fix_msg, data)
-            except BusinessMessageReject as bmr:
-                # translate to aiofix.validator.BusinessRejectError, adding current fix_msg as context
-                raise BusinessRejectError(
-                    bmr.message,
-                    fix_msg,
-                    ref_id=bmr.ref_id,
-                    reject_reason=bmr.reject_reason,
-                )
+            await c(fix_msg, data)
         else:
-            raise RuntimeError(f"No async handler defined for {data["msg_type"]}")
+            raise RuntimeError(f"No async handler defined for {data['msg_type']}")
 
     async def _post_connect(self) -> None:
         self.logger.info(
@@ -166,19 +176,22 @@ class StreamFIXSession:
         self.logger.info("post_disconnect (server) reached")
 
     @asynccontextmanager
-    async def send_message(self, msg_type: int, msgseqnum: Optional[int]=None):
+    async def send_message(
+        self, msg_type: str, msgseqnum: Optional[int] = None
+    ) -> AsyncGenerator[FIXBuilder, None]:
         delta = 0
         if msgseqnum is None:
             msgseqnum = self.nextOutbound
             delta = 1
         builder = FIXBuilder(
-            self.version, self.components, self.clock, msg_type, msgseqnum
+            self.version, self.components, self.clock, msg_type.encode(), msgseqnum
         )
         yield builder
         outmsg = builder.finish()
         self.nextOutbound += delta
         self.last_outbound = self.clock()
-        await self.writer.send(outmsg)
+        if self.writer:
+            await self.writer.send(outmsg)
 
     async def send_login(self) -> None:
         async with self.send_message(msgtype.Logon) as builder:
@@ -255,6 +268,10 @@ class StreamFIXSession:
             hb_interval = max(self.hb_interval - 2, 1)
             await asyncio.sleep(1.0)
             try:
+                if self.writer is None:
+                    self.logger.info("tx await_heartbeat returning as writer is None")
+                    break
+
                 if (
                     self.clock() - self.last_outbound > hb_interval
                     and self.logon_recieved
@@ -304,13 +321,13 @@ class StreamFIXSession:
     async def on_test_request(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
         if self.logon_recieved:
             self.logger.info(
-                f"Responding to test request with ID {data["test_req_id"]}"
+                f"Responding to test request with ID {data['test_req_id']}"
             )
             async with self.send_message(msgtype.Heartbeat) as builder:
                 builder.append(tags.TestReqID, data["test_req_id"])
         else:
             self.logger.info(
-                f"Ignoring test request {data["test_req_id"]} as no logon recieved"
+                f"Ignoring test request {data['test_req_id']} as no logon recieved"
             )
 
     async def on_reject(self, msg: FIXMessageIn, data: dict[str, Any]) -> None:
@@ -342,7 +359,13 @@ class StreamFIXConnection:
 
     counter = 0
 
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, monitor, application=None, session=None):
+    def __init__(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        application: Optional[BaseApplication] = None,
+        session: Optional[StreamFIXSession] = None,
+    ):
         StreamFIXConnection.counter += 1
         addr = writer.get_extra_info("peername")
         self.connection_id = f"fix-{self.counter}-{addr[0]}:{addr[1]}"
@@ -352,7 +375,6 @@ class StreamFIXConnection:
         self.application = application
         self.timeout_task = asyncio.ensure_future(self.await_logon_timeout())
         self.session = session
-        self.monitor = monitor
         if session:
             session.writer = self
             session.logger = self.logger
@@ -361,9 +383,7 @@ class StreamFIXConnection:
         self.logger.debug("Socket (early) connected")
         if self.session:
             await self.session._post_connect()
-        # await self.monitor[self.connection_id] = self
-        await self.monitor.__setitem__(self.connection_id, self)
-        self.monitor.addHandlers(self.connection_id, self.logger)
+
         self.logger.info("Socket connected")
 
         # context manager to close() writer if we die with exception
@@ -374,7 +394,7 @@ class StreamFIXConnection:
                     sz = peek_length(data)
                     data = data + await self.reader.readexactly(sz - PEEK_SIZE)
                     fix_msg = FIXMessageIn(data)
-                    self.logger.debug(f"Received {fix_msg.buffer}")
+                    self.logger.debug(f"Received {fix_msg.buffer!r}")
                     await self.handle_incoming(fix_msg)
 
                 # Sanitise certain error messages to the websocket logger, dropping the exception
@@ -409,8 +429,6 @@ class StreamFIXConnection:
                         "Connection abort due to internal error (contact support for details)"
                     )
                     break
-        self.writer = None
-        await self.monitor.__delitem__(self.connection_id)
         if self.session:
             await self.session.read_loop_closed()
 
@@ -430,19 +448,18 @@ class StreamFIXConnection:
         else:
             # Not yet authenticated, accept exactly one Login message
             if fix_msg.msg_type == msgtype.Logon:
+                assert self.application
                 self.session = await self.application.checkLogin(fix_msg, self)
                 self.session.writer = self
                 # Now check sequencing
                 # await self.session.handle_incoming(fix_msg)
                 await self.session._post_login()
-                # trigger update to show logged in status
-                await self.monitor.changed(self.connection_id, self)
             else:
                 raise LoginError("First message not Logon", fix_msg)
 
     async def send(self, outmsg: FIXMessageIn) -> None:
-        if self.writer:
-            self.logger.debug(f"sending {outmsg.buffer}")
+        if not self.writer.is_closing():
+            self.logger.debug(f"sending {outmsg.buffer!r}")
             self.writer.write(outmsg.buffer)
 
     def time(self) -> float:
@@ -450,30 +467,3 @@ class StreamFIXConnection:
 
     async def post_connect(self) -> None:
         pass
-
-
-class BaseMonitor(collections.abc.MutableMapping):
-    def __init__(self, *args, **kwargs):
-        self.store = dict()
-        self.update(dict(*args, **kwargs))  # use the free update to set keys
-
-    def __getitem__(self, key):
-        return self.store[key]
-
-    async def __setitem__(self, key, value):
-        self.store[key] = value
-
-    async def __delitem__(self, key):
-        del self.store[key]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self) -> int:
-        return len(self.store)
-
-    def addHandlers(self, key, logger):
-        pass
-
-    async def changed(self, key, value):
-        await self.__setitem__(key, value)

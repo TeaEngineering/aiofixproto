@@ -15,10 +15,10 @@ structually correct, complete and may be cleanly iterated over.
 
 import logging
 import time
-from typing import Iterator, Callable
+from typing import Callable, Iterator
 
 
-def from_delim(text: str, delim: str="|") -> "FIXMessageIn":
+def from_delim(text: str, delim: str = "|") -> "FIXMessageIn":
     assert len(delim) == 1
     buffer = "".join(["\001" if b == delim else b for b in text])
     b = bytes(buffer, "ASCII")
@@ -184,7 +184,7 @@ class FIXMessageIn:
         tag_data_start = -1
         tag = -1
         i = 0
-        datatag_known_lengths: dict[int,int] = {}
+        datatag_known_lengths: dict[int, int] = {}
         while i < len(buffer):
             if buffer[i] == 61 and not in_tag_value:
                 tag = int(buffer[tag_start:i])
@@ -235,7 +235,14 @@ class FIXMessageIn:
 
 class FIXBuilder:
     # Assemble a FIX message for sending
-    def __init__(self, version: int, components: list[tuple[int, bytes]], clock: Callable[[], int], msgtype: bytes, msgseqnum: int):
+    def __init__(
+        self,
+        version: int,
+        components: list[tuple[int, bytes]],
+        clock: Callable[[], float],
+        msgtype: bytes,
+        msgseqnum: int,
+    ):
         if len(msgtype) not in [1, 2]:
             raise ValueError("Bad message type, must be 1 or 2 chars")
         self.fields: list[tuple[int, bytes]] = []
@@ -285,9 +292,11 @@ class FIXBuilder:
         raw = str(value).encode("utf-8")
         self.fields.append((tag, raw))
 
-    def append_datetime(self, tag: int, value: float|int|Callable[[],float]=time.time) -> None:
+    def append_datetime(
+        self, tag: int, value: float | int | Callable[[], float] = time.time
+    ) -> None:
         # value should be a time.time() integer value
-        iv: float = .0
+        iv: float = 0.0
         if callable(value):
             iv = value()
         else:
@@ -300,7 +309,7 @@ class FIXBuilder:
         fmt = time.strftime("%Y%m%d-%H:%M:%S.000", time.gmtime(iv))
         self.append(tag, fmt)  # '20150213-15:05:44.079'
 
-    def append(self, tag: int, value: int|str|float|bytes) -> None:
+    def append(self, tag: int, value: int | str | float | bytes) -> None:
         if type(value) is int:
             self.append_int(tag, value)
         elif type(value) is str:
