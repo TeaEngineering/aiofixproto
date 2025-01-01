@@ -238,7 +238,7 @@ class FIXBuilder:
     def __init__(
         self,
         version: int,
-        components: list[tuple[int, bytes]],
+        components: "list[tuple[int, bytes]]",
         clock: Callable[[], float],
         msgtype: bytes,
         msgseqnum: int,
@@ -308,7 +308,7 @@ class FIXBuilder:
         fmt = time.strftime("%Y%m%d-%H:%M:%S.000", time.gmtime(iv))
         self.append(tag, fmt)  # '20150213-15:05:44.079'
 
-    def append(self, tag: int, value: int | str | float | bytes) -> None:
+    def append(self, tag: int, value: "int | str | float | bytes") -> None:
         if type(value) is int:
             self.append_int(tag, value)
         elif type(value) is str:
